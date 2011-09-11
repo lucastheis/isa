@@ -13,6 +13,8 @@ class Distribution(object):
 	Provides an interface and common functionality for probabilistic models.
 	"""
 
+	VERBOSITY = 2
+
 	def __init__(self):
 		raise NotImplementedError(str(self.__class__) + ' is an abstract class.')
 
@@ -27,7 +29,7 @@ class Distribution(object):
 		"""
 
 		raise NotImplementedError('Abstract method \'sample\' not implemented in '
-		    + str(self.__class__))
+			+ str(self.__class__))
 
 
 
@@ -53,7 +55,7 @@ class Distribution(object):
 		"""
 
 		raise NotImplementedError('Abstract method \'train\' not implemented in '
-		    + str(self.__class__))
+			+ str(self.__class__))
 
 
 
@@ -64,9 +66,9 @@ class Distribution(object):
 		@type  data: array_like
 		@param data: data stored in columns
 		"""
-		
+
 		raise NotImplementedError('Abstract method \'loglikelihood\' not implemented in '
-		    + str(self.__class__))
+			+ str(self.__class__))
 
 
 
@@ -79,3 +81,14 @@ class Distribution(object):
 		"""
 
 		return -mean(self.loglikelihood(data)) / data.shape[0]
+
+
+
+	def energy(self, data):
+		return -self.loglikelihood(data)
+
+
+
+	def energy_gradient(self, data):
+		raise NotImplementedError('Abstract method \'energy_gradient\' not implemented in '
+			+ str(self.__class__))

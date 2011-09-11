@@ -10,19 +10,18 @@ from distribution import Distribution
 from numpy.random import rand, randint, randn
 from numpy import *
 from scipy.stats import gamma
+from utils import logmeanexp, logsumexp
 
 class GSM(Distribution):
 	def __init__(self, dim=1, num_scales=8):
 		self.dim = dim
 		self.num_scales = num_scales
-
-		# initial scale parameters
 		self.scales = 0.75 + rand(num_scales) / 2.
 		self.scales /= mean(self.scales)
 
 
 
-	def initialize(self, method='cauchy'):
+	def initialize(self, method='student'):
 		if method.lower() == 'student':
 			# sample scales from respective Gamma distribution
 			self.scales = 1. / sqrt(gamma.rvs(1, 0, 1, size=self.num_scales))
@@ -56,7 +55,7 @@ class GSM(Distribution):
 	def sample_posterior(self, data):
 		scales = self.scales.reshape(self.num_scales, 1)
 
-		# calculate cumulative posterior distribution over scales
+		# calculate cumulative posterior over scales
 		norms = sum(square(data), 0).reshape(1, -1)
 		cmf = cumsum(exp(-0.5 * norms / square(scales) - self.dim * log(scales)), 0)
 		cmf /= cmf[-1]
@@ -70,3 +69,33 @@ class GSM(Distribution):
 			indices[uni > cmf[j]] = j + 1
 
 		return self.scales[indices]
+
+
+
+	def loglikelihood(self, data):
+		return self.energy(data) - self.dim / 2. * log(2. * pi)
+
+
+
+	def energy(self, data):
+		scales = self.scales.reshape(self.num_scales, 1)
+
+		# compute unnormalized log-likelihoods
+		norms = sum(square(data), 0).reshape(1, -1)
+		uloglik = -0.5 * norms / square(scales) - self.dim * log(scales)
+
+		# average over scales
+		return -logmeanexp(uloglik, 0)
+
+
+
+	def energy_gradient(self, data):
+		scales = self.scales.reshape(self.num_scales, 1)
+
+		# compute posterior over scales
+		norms = sum(square(data), 0).reshape(1, -1)
+		post = -0.5 * norms / square(scales) - self.dim * log(scales)
+		post = exp(post - logsumexp(post, 0))
+
+		# compute energy gradient
+		return multiply(dot(1. / square(scales).T, post), data)

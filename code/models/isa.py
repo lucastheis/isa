@@ -9,13 +9,11 @@ __docformat__ = 'epytext'
 from distribution import Distribution
 from numpy import *
 from numpy.random import randint, randn, rand
-from numpy.linalg import svd, pinv, inv, cholesky
+from numpy.linalg import svd, pinv, inv
 from scipy.linalg import solve
-from tools import gaborf
-from tools.parallel import mapp
+from tools import gaborf, mapp
 from tools.shmarray import asshmarray
 from gsm import GSM
-from multiprocessing import Pool
 
 class ISA(Distribution):
 	"""
@@ -112,35 +110,60 @@ class ISA(Distribution):
 
 
 
-	def sample_scales(self, y):
-		s = []
-		k = 0
+	def sample_scales(self, data):
+		scales, k = [], 0
+
 		for model in self.subspaces:
-			scales = model.sample_posterior(y[k:k + model.dim])
-			for j in range(model.dim):
-				s.append(scales)
+			s = model.sample_posterior(data[k:k + model.dim])
+
+			# add scales for each dimension
+			scales.extend(s for _ in range(model.dim))
+
 			k += model.dim
-		s = vstack(s)
 
-		return s
-
+		return vstack(scales)
 
 
-	def sample_posterior(self, data, num_steps=5):
+
+	def sample_posterior(self, data, method='gibbs'):
 		if self.num_hiddens == self.num_visibles:
 			return dot(inv(self.A), data)
 
+		if method.lower() == 'gibbs':
+			return self.sample_posterior_gibbs(data)
+
+		elif method.lower() in ['hmc', 'hamilton']:
+			return self.sample_posterior_hmc(data)
+
+		else:
+			raise ValueError('Unknown sampling method \'{0}\'.'.format(method))
+
+
+
+	def sample_nullspace(self, data, method='gibbs'):
+		# nullspace basis
+		B = svd(self.A)[2][self.num_visibles:, :]
+
+		return dot(B, self.sample_posterior(data, method=method))
+
+
+
+
+	def sample_posterior_gibbs(self, data, num_steps=10):
 		# filter matrix and filter responses
 		W = pinv(self.A)
 		Wx = dot(W, data)
 
 		# nullspace projection matrix
-		P = eye(self.num_hiddens) - dot(W, self.A)
+		Q = eye(self.num_hiddens) - dot(W, self.A)
 
 		# initial hidden state
-		y = asshmarray(Wx + dot(P, self.sample_prior(data.shape[1])))
+		y = asshmarray(Wx + dot(Q, self.sample_prior(data.shape[1])))
 
-		for _ in range(num_steps):
+		for step in range(num_steps):
+			if Distribution.VERBOSITY > 1:
+				print step, mean(self.energy(y))
+
 			# sample scales
 			s = self.sample_scales(y)
 
@@ -156,6 +179,84 @@ class ISA(Distribution):
 			def parfor(i):
 				y[:, i] = dot(C[i], solve(dot(self.A, C[i]), x_[:, i], sym_pos=True))
 			mapp(parfor, range(data.shape[1]))
-			y = asshmarray(Wx + dot(P, y + y_))
+			y = asshmarray(Wx + dot(Q, y + y_))
 
 		return asarray(y)
+
+
+
+	def sample_posterior_hmc(self, X, num_steps=500):
+		# filter matrix
+		W = pinv(self.A)
+
+		# nullspace basis
+		B = svd(self.A)[2][self.num_visibles:, :]
+
+		# nullspace projection matrix
+		Q = dot(B.T, B)
+
+		# sampling hyperparameters
+		lf_num_steps = 5
+		lf_step_sizes = 0.02 + zeros([1, X.shape[1]])
+		mh_acc_rate = 0.95
+
+		# initialization of hidden variables
+		Y = dot(W, X)
+		Z = dot(B, self.sample_prior(X.shape[1]))
+
+		# perform hybrid Monte Carlo sampling
+		for step in range(num_steps):
+			if Distribution.VERBOSITY > 1:
+				print step, mean(self.energy(Y + dot(B.T, Z)))
+
+			# sample momentum
+			P = randn(*Z.shape)
+
+			# store Hamiltonian
+			Zold = copy(Z)
+			Hold = self.energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
+
+			# leapfrog steps
+			P -= lf_step_sizes / 2. * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
+			for _ in range(lf_num_steps):
+				Z += lf_step_sizes * P
+				tmp = dot(B, self.energy_gradient(Y + dot(B.T, Z)))
+				P -= lf_step_sizes * tmp
+			P += lf_step_sizes / 2. * tmp
+
+			# new Hamiltonian
+			Hnew = self.energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
+
+			# Metropolis accept/reject step
+			reject = rand(1, Z.shape[1]) > exp(Hold - Hnew)
+			Z[:, reject] = Zold[:, reject]
+
+			# adjust step sizes so that acceptance rate stays constant
+			lf_step_sizes[reject] *= 0.8
+			lf_step_sizes[-reject] *= 1. / power(0.8, (1. - mh_acc_rate) / mh_acc_rate)
+
+
+		return Y + dot(B.T, Z)
+
+
+
+	def energy_gradient(self, data):
+		gradient, k = [], 0
+
+		for model in self.subspaces:
+			gradient.append(
+				model.energy_gradient(data[k:k + model.dim]))
+			k += model.dim
+
+		return vstack(gradient)
+
+
+
+	def energy(self, data):
+		energy, k = zeros([1, data.shape[1]]), 0
+
+		for model in self.subspaces:
+			energy += model.energy(data[k:k + model.dim])
+			k += model.dim
+
+		return energy
