@@ -12,9 +12,10 @@ from numpy.random import randint, randn, rand
 from numpy.linalg import svd, pinv, inv, cholesky
 from scipy.linalg import solve
 from tools import gaborf
-from tools.parallel import map
+from tools.parallel import mapp
 from tools.shmarray import asshmarray
 from gsm import GSM
+from multiprocessing import Pool
 
 class ISA(Distribution):
 	"""
@@ -34,7 +35,7 @@ class ISA(Distribution):
 		if not num_hiddens:
 			self.num_hiddens = num_visibles
 
-		# linear filters
+		# linear features
 		self.A = randn(self.num_visibles, self.num_hiddens)
 
 		# subspace densities
@@ -45,7 +46,7 @@ class ISA(Distribution):
 
 	def initialize(self, data=None, method='data'):
 		"""
-		Initializes linear filters with more sensible values.
+		Initializes linear features with more sensible values.
 
 		@type  data: array_like
 		@param data: data points stored in columns
@@ -55,12 +56,12 @@ class ISA(Distribution):
 		"""
 
 		if method.lower() == 'data':
-			# initialize filters with data points
+			# initialize features with data points
 			if data is not None:
 				self.A = data[:, randint(data.shape[1], size=self.num_hiddens)]
 
 		elif method.lower() == 'gabor':
-			# initialize filters with Gabor filters
+			# initialize features with Gabor filters
 			if self.subspaces[0].dim > 1 and not mod(self.num_hiddens, 2):
 				for i in range(self.num_hiddens / 2):
 					G = gaborf(self.num_visibles)
@@ -129,15 +130,15 @@ class ISA(Distribution):
 		if self.num_hiddens == self.num_visibles:
 			return dot(inv(self.A), data)
 
-		# create orthogonal basis for nullspace
-		A = self.A
-		B = svd(A)[2][self.num_visibles:, :]
+		# filter matrix and filter responses
+		W = pinv(self.A)
+		Wx = dot(W, data)
 
-		VB = dot(B.T, B)
+		# nullspace projection matrix
+		P = eye(self.num_hiddens) - dot(W, self.A)
 
-		Wx = dot(pinv(self.A), data)
-
-		y = asshmarray(Wx + dot(VB, self.sample_prior(data.shape[1])))
+		# initial hidden state
+		y = asshmarray(Wx + dot(P, self.sample_prior(data.shape[1])))
 
 		for _ in range(num_steps):
 			# sample scales
@@ -145,17 +146,16 @@ class ISA(Distribution):
 
 			# sample from prior conditioned on scales
 			y_ = multiply(randn(self.num_hiddens, data.shape[1]), s)
-			x_ = data - dot(A, y_)
+			x_ = data - dot(self.A, y_)
 
-			C = multiply(
-				square(s).reshape(-1, 1, data.shape[1]),
-				A.T.reshape(self.num_hiddens, -1, 1)).transpose([2, 0, 1])
+			# variances and partial covariances
+			v = square(s).reshape(-1, 1, data.shape[1])
+			C = multiply(v, self.A.T.reshape(self.num_hiddens, -1, 1)).transpose([2, 0, 1])
 
+			# sample hidden state
 			def parfor(i):
-				y[:, i] = dot(C[i], solve(dot(A, C[i]), x_[:, i], sym_pos=True))
+				y[:, i] = dot(C[i], solve(dot(self.A, C[i]), x_[:, i], sym_pos=True))
+			mapp(parfor, range(data.shape[1]))
+			y = asshmarray(Wx + dot(P, y + y_))
 
-			map(parfor, range(data.shape[1]))
-
-			y = asshmarray(Wx + dot(VB, asarray(y) + y_))
-
-		return y
+		return asarray(y)
