@@ -233,15 +233,8 @@ class ISA(Distribution):
 
 	def sample_posterior_hmc(self, X, num_steps=100, Y=None, **kwargs):
 		# hyperparameters
-		acc_rate = kwargs.get('acc_rate', 0.9)
-		adaptive = kwargs.get('adaptive', True)
 		lf_num_steps = kwargs.get('lf_num_steps', 10)
-		lf_step_sizes = kwargs.get('lf_step_size', 0.01) + zeros([1, X.shape[1]])
-		lf_step_size_min = kwargs.get('lf_step_size_min', 0.001)
-		lf_step_size_max = kwargs.get('lf_step_size_max', 0.2)
-		lf_step_size_dec = kwargs.get('lf_step_size_dec', 0.95)
-		lf_step_size_inc = kwargs.get('lf_step_size_inc', 
-			1. / power(lf_step_size_dec, (1. - acc_rate) / acc_rate))
+		lf_step_size = kwargs.get('lf_step_size', 0.01) + zeros([1, X.shape[1]])
 
 		# nullspace basis
 		B = svd(self.A)[2][self.num_visibles:, :]
@@ -260,16 +253,16 @@ class ISA(Distribution):
 			Hold = self.energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
 
 			# first half-step
-			P -= lf_step_sizes / 2. * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
-			Z += lf_step_sizes * P
+			P -= lf_step_size / 2. * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
+			Z += lf_step_size * P
 
 			# full leapfrog steps
 			for _ in range(lf_num_steps - 1):
-				P -= lf_step_sizes * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
-				Z += lf_step_sizes * P
+				P -= lf_step_size * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
+				Z += lf_step_size * P
 
 			# final half-step
-			P -= lf_step_sizes / 2. * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
+			P -= lf_step_size / 2. * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
 
 			# new Hamiltonian
 			Hnew = self.energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
@@ -278,19 +271,10 @@ class ISA(Distribution):
 			reject = (rand(1, Z.shape[1]) > exp(Hold - Hnew)).flatten()
 			Z[:, reject] = Zold[:, reject]
 
-			if adaptive:
-				# adjust step sizes so that acceptance rate stays constant
-				lf_step_sizes[:, reject] *= lf_step_size_dec
-				lf_step_sizes[:,-reject] *= lf_step_size_inc
-
-				# make sure step sizes don't become too small or large
-				lf_step_sizes[lf_step_sizes > lf_step_size_max] = lf_step_size_max
-				lf_step_sizes[lf_step_sizes < lf_step_size_min] = lf_step_size_min
 
 			if Distribution.VERBOSITY > 1:
-				print '{}\t{:.2f}\t{:.2f}\t{:.2f}'.format(step,
+				print '{}\t{:.2f}\t{:.2f}'.format(step,
 					mean(self.energy(Y + dot(B.T, Z))),
-					mean(lf_step_sizes),
 					mean(-reject))
 
 
@@ -300,14 +284,7 @@ class ISA(Distribution):
 
 	def sample_posterior_metropolis(self, X, num_steps=1000, Y=None, **kwargs):
 		# hyperparameters
-		acc_rate = kwargs.get('acc_rate', 0.9)
-		adaptive = kwargs.get('adaptive', True)
-		step_sizes = kwargs.get('step_size', 0.01) + zeros([1, X.shape[1]])
-		step_size_min = kwargs.get('step_size_min', 0.001)
-		step_size_max = kwargs.get('step_size_max', 0.2)
-		step_size_dec = kwargs.get('step_size_dec', 0.95)
-		step_size_inc = kwargs.get('step_size_inc', 
-			1. / power(step_size_dec, (1. - acc_rate) / acc_rate))
+		step_size = kwargs.get('step_size', 0.01) + zeros([1, X.shape[1]])
 
 		# nullspace basis
 		B = svd(self.A)[2][self.num_visibles:, :]
@@ -318,16 +295,16 @@ class ISA(Distribution):
 		Y = dot(pinv(self.A), X)
 
 		if Distribution.VERBOSITY > 1:
-			print '{0:>6}{1:>10}{2:>10}{3:>10}'.format(
-				'STEPS', 'ENERGY', 'ACC_RATE', 'STEP_SIZE')
-			print '{0:6}{1:10.2f}{2:>10}{3:10.3f}'.format(0,
-				mean(self.energy(Y + dot(B.T, Z))), '-', mean(step_sizes))
+			print '{0:>6}{1:>10}{2:>10}'.format(
+				'STEPS', 'ENERGY', 'ACC_RATE')
+			print '{0:6}{1:10.2f}{2:>10}'.format(0,
+				mean(self.energy(Y + dot(B.T, Z))), '-')
 
 		for step in range(num_steps):
 			Zold = copy(Z)
 			Eold = self.energy(Y + dot(B.T, Z))
 
-			Z += step_sizes * randn(*Z.shape)
+			Z += step_size * randn(*Z.shape)
 
 			# new Hamiltonian
 			Enew = self.energy(Y + dot(B.T, Z))
@@ -336,19 +313,9 @@ class ISA(Distribution):
 			reject = (log(rand(1, Z.shape[1])) > Eold - Enew).flatten()
 			Z[:, reject] = Zold[:, reject]
 
-			if adaptive:
-				# adjust step sizes so that acceptance rate stays constant
-				step_sizes[:, reject] *= step_size_dec
-				step_sizes[:,-reject] *= step_size_inc
-
-				# make sure step sizes don't become too small or large
-				step_sizes[step_sizes > step_size_max] = step_size_max
-				step_sizes[step_sizes < step_size_min] = step_size_min
-
 			if Distribution.VERBOSITY > 1:
-				print '{0:6}{1:10.2f}{2:10.2f}{3:10.3f}'.format(step + 1,
-					mean(self.energy(Y + dot(B.T, Z))), 1. - mean(reject), mean(step_sizes))
-
+				print '{0:6}{1:10.2f}{2:10.2f}'.format(step + 1,
+					mean(self.energy(Y + dot(B.T, Z))), 1. - mean(reject))
 
 		return Y + dot(B.T, Z)
 
