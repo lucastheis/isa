@@ -21,7 +21,7 @@ class GSM(Distribution):
 
 
 
-	def initialize(self, method='student'):
+	def initialize(self, method='cauchy'):
 		if method.lower() == 'student':
 			# sample scales from respective Gamma distribution
 			self.scales = 1. / sqrt(gamma.rvs(1, 0, 1, size=self.num_scales))

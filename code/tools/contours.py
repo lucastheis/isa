@@ -36,7 +36,7 @@ def contours(data, bins=20, levels=10, threshold=3., **kwargs):
 	data = data[:, error < threshold]
 
 	# compute histogram
-	Z, X, Y = histogram2d(data[0, :], data[1, :], bins)
+	Z, X, Y = histogram2d(data[0, :], data[1, :], bins, normed=True)
 
 	X = (X[1:] + X[:-1]) / 2.
 	Y = (Y[1:] + Y[:-1]) / 2.
