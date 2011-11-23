@@ -10,7 +10,7 @@ from distribution import Distribution
 from numpy import *
 from numpy import max
 from numpy.random import randint, randn, rand
-from numpy.linalg import svd, pinv, inv
+from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
 from tools import gaborf, mapp
 from tools.shmarray import asshmarray
@@ -54,10 +54,17 @@ class ISA(Distribution):
 		@param method: type of initialization ('data', 'gabor' or 'random')
 		"""
 
+		# initialize subspace distributions
+		for model in self.subspaces:
+			model.initialize()
+
 		if method.lower() == 'data':
 			# initialize features with data points
 			if X is not None:
-				self.A = X[:, randint(X.shape[1], size=self.num_hiddens)]
+				# center data
+				l = 1. / 20.
+				self.A = X[:, randint(X.shape[1], size=self.num_hiddens)] / sqrt(self.num_hiddens)
+				self.A = (1. - l) * self.A + l * randn(*self.A.shape)
 
 		elif method.lower() == 'gabor':
 			# initialize features with Gabor filters
@@ -80,14 +87,75 @@ class ISA(Distribution):
 		else:
 			raise ValueError('Unknown initialization method \'{0}\'.'.format(method))
 
-		# initialize subspace distributions
+
+
+	def train(self, X, max_iter=10, method=('sgd', {}), sampling_method=('gibbs', {})):
+		"""
+		@type  max_iter: integer
+		@param max_iter: maximum number of iterations through the dataset
+
+		@type  method: tuple
+		@param method: optimization method used to optimize filters
+
+		@type  sampling_method: tuple
+		@param sampling_method: method to generate hidden representations
+		"""
+
+		print self.evaluate(X) / log(2.)
+
+		for i in range(max_iter):
+			# complete data (E)
+			Y = self.sample_posterior(X, method=sampling_method)
+
+			# optimize parameters with respect to completed data (M)
+			self.train_sgd(Y, **method[1])
+			if i > 30:
+				self.train_prior(Y)
+
+			print self.evaluate(X) / log(2.)
+
+
+
+	def train_prior(self, Y, **kwargs):
 		for model in self.subspaces:
-			model.initialize()
+			model.train(Y[:model.dim])
+			Y = Y[model.dim:]
 
 
 
-	def train(self, X, method=''):
-		pass
+	def train_sgd(self, Y, **kwargs):
+		max_iter = kwargs.get('max_iter', 1)
+		batch_size = kwargs.get('batch_size', 100)
+		step_width = kwargs.get('step_width', 0.001)
+		momentum = kwargs.get('momentum', 0.8)
+
+		# nullspace basis
+		B = svd(self.A)[2][self.num_visibles:, :]
+		
+		# completed basis and filters
+		A = vstack([self.A, B])
+		W = inv(A)
+
+		# completed data
+		XZ = dot(A, Y)
+
+		P = 0.
+
+		for _ in range(max_iter):
+			for i in range(0, XZ.shape[1], batch_size):
+				batch = XZ[:, i:i + batch_size]
+
+				if not batch.shape[1] < batch_size:
+					# calculate gradient
+					P = momentum * P + A.T - \
+						dot(self.energy_gradient(dot(W, batch)), batch.T) / batch_size
+
+					# update parameters
+					W += step_width * P
+					A = inv(W)
+
+		# update model parameters
+		self.A = A[:self.A.shape[0]]
 
 
 
@@ -165,7 +233,7 @@ class ISA(Distribution):
 			method = (method[0], {})
 
 		if self.num_hiddens == self.num_visibles:
-			return dot(inv(self.A), X)
+			return dot(inv(self.A), X) # faster than `solve` for large `X`
 
 		if method[0].lower() == 'gibbs':
 			return self.sample_posterior_gibbs(X, **method[1])
@@ -188,9 +256,7 @@ class ISA(Distribution):
 
 		# nullspace basis
 		B = svd(self.A)[2][self.num_visibles:, :]
-
 		return dot(B, self.sample_posterior(X, method=method))
-
 
 
 
@@ -207,9 +273,6 @@ class ISA(Distribution):
 			asshmarray(Wx + dot(Q, self.sample_prior(X.shape[1])))
 
 		for step in range(num_steps):
-			if Distribution.VERBOSITY > 1:
-				print step, mean(self.energy(Y))
-
 			# update scales
 			S = self.sample_scales(Y)
 
@@ -226,6 +289,9 @@ class ISA(Distribution):
 				Y[:, i] = dot(C[i], solve(dot(self.A, C[i]), X_[:, i], sym_pos=True))
 			mapp(parfor, range(X.shape[1]))
 			Y = asshmarray(Wx + dot(Q, Y + Y_))
+
+			if Distribution.VERBOSITY > 1:
+				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.energy(Y)))
 
 		return asarray(Y)
 
@@ -271,12 +337,10 @@ class ISA(Distribution):
 			reject = (rand(1, Z.shape[1]) > exp(Hold - Hnew)).flatten()
 			Z[:, reject] = Zold[:, reject]
 
-
 			if Distribution.VERBOSITY > 1:
-				print '{}\t{:.2f}\t{:.2f}'.format(step,
+				print '{0:6}\t{1:10.2f}\t{2:10.2f}'.format(step + 1,
 					mean(self.energy(Y + dot(B.T, Z))),
 					mean(-reject))
-
 
 		return Y + dot(B.T, Z)
 
@@ -284,7 +348,7 @@ class ISA(Distribution):
 
 	def sample_posterior_metropolis(self, X, num_steps=1000, Y=None, **kwargs):
 		# hyperparameters
-		step_size = kwargs.get('step_size', 0.01) + zeros([1, X.shape[1]])
+		standard_deviation = kwargs.get('standard_deviation', 0.01)
 
 		# nullspace basis
 		B = svd(self.A)[2][self.num_visibles:, :]
@@ -294,17 +358,11 @@ class ISA(Distribution):
 			dot(B, self.sample_prior(X.shape[1]))
 		Y = dot(pinv(self.A), X)
 
-		if Distribution.VERBOSITY > 1:
-			print '{0:>6}{1:>10}{2:>10}'.format(
-				'STEPS', 'ENERGY', 'ACC_RATE')
-			print '{0:6}{1:10.2f}{2:>10}'.format(0,
-				mean(self.energy(Y + dot(B.T, Z))), '-')
-
 		for step in range(num_steps):
 			Zold = copy(Z)
 			Eold = self.energy(Y + dot(B.T, Z))
 
-			Z += step_size * randn(*Z.shape)
+			Z += standard_deviation * randn(*Z.shape)
 
 			# new Hamiltonian
 			Enew = self.energy(Y + dot(B.T, Z))
@@ -322,6 +380,10 @@ class ISA(Distribution):
 
 
 	def energy_gradient(self, Y):
+		"""
+		Gradient of log-likelihood with respect to hidden state.
+		"""
+
 		gradient = []
 
 		for model in self.subspaces:
@@ -333,7 +395,12 @@ class ISA(Distribution):
 
 
 
+	# TODO: rename energy and loglikelihood
 	def energy(self, Y):
+		"""
+		Free energy of hidden state.
+		"""
+
 		energy = zeros([1, Y.shape[1]])
 
 		for model in self.subspaces:
@@ -341,3 +408,23 @@ class ISA(Distribution):
 			Y = Y[model.dim:]
 
 		return energy
+
+
+
+	def loglikelihood(self, Y):
+		energy = zeros([1, Y.shape[1]])
+
+		for model in self.subspaces:
+			energy += model.loglikelihood(Y[:model.dim])
+			Y = Y[model.dim:]
+
+		return energy
+
+
+
+	def evaluate(self, X):
+		if self.num_hiddens == self.num_visibles:
+			W = inv(self.A)
+			return (-mean(self.loglikelihood(dot(W, X))) - slogdet(W)[1]) / X.shape[0]
+		else:
+			raise NotImplementedError()
