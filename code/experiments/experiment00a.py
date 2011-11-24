@@ -17,18 +17,18 @@ from tools.mapp import mapp
 from matplotlib.pyplot import *
 from time import time
 
-Distribution.VERBOSITY = 0
+Distribution.VERBOSITY = 2
 
 # sampling methods with parameters
 methods = [
 	('gibbs', {
-		'num_steps': 10}),
+		'num_steps': 20}),
 	('hmc', {
 		'num_steps': 100,
 		'lf_step_size': 0.03,
 		'lf_num_steps': 20}),
 	('metropolis', {
-		'num_steps': 10000,
+		'num_steps': 5000,
 		'standard_deviation': 0.03}),
 	]
 
@@ -36,13 +36,13 @@ def main(argv):
 	py_seed(1)
 	np_seed(1)
 
-	m = ISA(2, 4, 1)
+	m = ISA(1, 2, 1)
 	m.initialize()
 
 	Y = m.sample_prior(5000)
 
 	# target energy
-	print '\t{0:.2f}'.format(mean(m.energy(Y)))
+	print '\t{0:.2f}'.format(mean(m.prior_energy(Y)))
 	print
 
 	# plot prior
@@ -50,8 +50,9 @@ def main(argv):
 
 	# sample posterior
 	X = dot(m.A, Y)
+#	X = zeros(X.shape) + 2
 	t = time()
-	Y = m.sample_posterior(X, method=methods[1])
+	Y = m.sample_posterior(X, method=methods[2])
 
 	print
 	print '{0:.2f} seconds'.format(time() - t)

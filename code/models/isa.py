@@ -47,7 +47,7 @@ class ISA(Distribution):
 
 
 
-	def initialize(self, X=None, method='gabor'):
+	def initialize(self, X=None, method='data'):
 		"""
 		Initializes linear features with more sensible values.
 
@@ -304,44 +304,51 @@ class ISA(Distribution):
 		# nullspace basis
 		B = svd(self.A)[2][self.num_visibles:, :]
 
-		# initialization of nullspace hidden variables
-		Z = dot(B, Y) if Y is not None else \
-			dot(B, self.sample_prior(X.shape[1]))
-		Y = dot(pinv(self.A), X)
+		if Y is None:
+			# initialize hidden variables
+			Y = self.sample_prior(X.shape[1])
+
+		# make sure hidden and visible states are consistent
+		Y0 = dot(pinv(self.A), X)
+		BB = dot(B.T, B)
+		Y = Y0 + dot(BB, Y)
 
 		for step in range(num_steps):
 			# sample momentum
-			P = randn(*Z.shape)
+			P = randn(B.shape[0], X.shape[1])
 
 			# store Hamiltonian
-			Zold = copy(Z)
-			Hold = self.prior_energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
+			Yold = copy(Y)
+			Hold = self.prior_energy(Y) + sum(square(P), 0) / 2.
 
 			# first half-step
-			P -= lf_step_size / 2. * dot(B, self.prior_energy_gradient(Y + dot(B.T, Z)))
-			Z += lf_step_size * P
+			P -= lf_step_size / 2. * dot(B, self.prior_energy_gradient(Y))
+			Y += lf_step_size * dot(B.T, P)
 
 			# full leapfrog steps
 			for _ in range(lf_num_steps - 1):
-				P -= lf_step_size * dot(B, self.prior_energy_gradient(Y + dot(B.T, Z)))
-				Z += lf_step_size * P
+				P -= lf_step_size * dot(B, self.prior_energy_gradient(Y))
+				Y += lf_step_size * dot(B.T, P)
 
 			# final half-step
-			P -= lf_step_size / 2. * dot(B, self.prior_energy_gradient(Y + dot(B.T, Z)))
+			P -= lf_step_size / 2. * dot(B, self.prior_energy_gradient(Y))
+
+			# make sure hidden and visible state stay consistent
+			Y = Y0 + dot(BB, Y)
 
 			# new Hamiltonian
-			Hnew = self.prior_energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
+			Hnew = self.prior_energy(Y) + sum(square(P), 0) / 2.
 
 			# Metropolis accept/reject step
-			reject = (rand(1, Z.shape[1]) > exp(Hold - Hnew)).flatten()
-			Z[:, reject] = Zold[:, reject]
+			reject = (rand(1, X.shape[1]) > exp(Hold - Hnew)).flatten()
+			Y[:, reject] = Yold[:, reject]
 
 			if Distribution.VERBOSITY > 1:
 				print '{0:6}\t{1:10.2f}\t{2:10.2f}'.format(step + 1,
-					mean(self.prior_energy(Y + dot(B.T, Z))),
+					mean(self.prior_energy(Y)),
 					mean(-reject))
 
-		return Y + dot(B.T, Z)
+		return Y
 
 
 
@@ -355,16 +362,17 @@ class ISA(Distribution):
 		# initialization of nullspace hidden variables
 		Z = dot(B, Y) if Y is not None else \
 			dot(B, self.sample_prior(X.shape[1]))
-		Y = dot(pinv(self.A), X)
+
+		Y0 = dot(pinv(self.A), X)
 
 		for step in range(num_steps):
 			Zold = copy(Z)
-			Eold = self.prior_energy(Y + dot(B.T, Z))
+			Eold = self.prior_energy(Y0 + dot(B.T, Z))
 
 			Z += standard_deviation * randn(*Z.shape)
 
 			# new Hamiltonian
-			Enew = self.prior_energy(Y + dot(B.T, Z))
+			Enew = self.prior_energy(Y0 + dot(B.T, Z))
 
 			# Metropolis accept/reject step
 			reject = (log(rand(1, Z.shape[1])) > Eold - Enew).flatten()
@@ -374,7 +382,11 @@ class ISA(Distribution):
 				print '{0:6}{1:10.2f}{2:10.2f}'.format(step + 1,
 					mean(self.prior_energy(Y + dot(B.T, Z))), 1. - mean(reject))
 
-		return Y + dot(B.T, Z)
+		return Y0 + dot(B.T, Z)
+
+
+
+	def sample_posterior_ais(self, X, **kwargs):
 
 
 
