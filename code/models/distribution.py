@@ -13,7 +13,7 @@ class Distribution(object):
 	Provides an interface and common functionality for probabilistic models.
 	"""
 
-	VERBOSITY = 2
+	VERBOSITY = 1
 
 	def __init__(self):
 		raise NotImplementedError(str(self.__class__) + ' is an abstract class.')

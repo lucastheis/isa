@@ -36,8 +36,7 @@ class GSM(Distribution):
 		else:
 			raise ValueError('Unknown initialization method \'{0}\'.'.format(method))
 
-		# normalize scales
-		self.scales /= sqrt(mean(square(self.scales)))
+		self.normalize()
 
 
 
@@ -45,8 +44,11 @@ class GSM(Distribution):
 		"""
 		Estimates parameters using EM.
 		"""
+		
+		if Distribution.VERBOSITY > 1:
+			print 0, self.evaluate(data) / log(2.)
 
-		for _ in range(max_iter):
+		for i in range(max_iter):
 			scales = self.scales.reshape(-1, 1)
 
 			# calculate posterior over scales (E)
@@ -60,7 +62,16 @@ class GSM(Distribution):
 			# adjust parameters (M)
 			self.scales = sqrt(sum(post * sqnorms, 1) / sum(post, 1) / self.dim)
 
-		# normalize scales
+			if Distribution.VERBOSITY > 1:
+				print i + 1, self.evaluate(data) / log(2.)
+
+
+
+	def normalize(self):
+		"""
+		Normalizes the scales so that the standard deviation of the GSM becomes 1.
+		"""
+
 		self.scales /= sqrt(mean(square(self.scales)))
 
 

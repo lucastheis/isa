@@ -10,21 +10,33 @@ from models import GSM
 from scipy.stats import t
 from pgf import *
 from numpy import *
+from scipy import integrate
 
 def main(argv):
-	gsm = GSM(1, 4)
-
+	# Student-t parameter
 	v = 8.
 
-	data = t.rvs(v, size=[1, 1000])
+	# sample from Student-t
+#	data = t.rvs(v, size=[1, 2000])
 
-#	gsm.initialize('cauchy')
-	gsm.train(data)
+	# train GSM
+	gsm1 = GSM(1, 2)
+#	gsm1.initialize('cauchy')
+#	gsm1.train(data, max_iter=100)
+	gsm1.scales = asarray([0.5, 4.])
+
+	data = gsm1.sample(20000)
+
+	gsm2 = GSM(1, 2)
+	gsm2.train(data, max_iter=100)
+
+	print gsm2.scales
 
 	x = linspace(-20, 20, 400)
-	plot(x, t.pdf(x, v), 'b')
-	plot(x, exp(gsm.loglikelihood(x.reshape(1, -1))), 'r')
-	legend('Student-t', 'GSM')
+#	plot(x, t.pdf(x, v), 'k')
+	plot(x, exp(gsm1.loglikelihood(x.reshape(1, -1))), 'r')
+	plot(x, exp(gsm2.loglikelihood(x.reshape(1, -1))), 'b')
+	legend('GSM1', 'GSM2', 'histogram')
 	draw()
 
 

@@ -35,15 +35,19 @@ class ISA(Distribution):
 			self.num_hiddens = num_visibles
 
 		# linear features
-		self.A = randn(self.num_visibles, self.num_hiddens)
+		self.A = randn(self.num_visibles, self.num_hiddens) / sqrt(self.num_hiddens)
 
 		# subspace densities
 		self.subspaces = [
 			GSM(ssize) for i in range(num_hiddens / ssize)]
 
+		# initialize subspace distributions
+		for model in self.subspaces:
+			model.initialize()
 
 
-	def initialize(self, X=None, method='data'):
+
+	def initialize(self, X=None, method='gabor'):
 		"""
 		Initializes linear features with more sensible values.
 
@@ -54,17 +58,12 @@ class ISA(Distribution):
 		@param method: type of initialization ('data', 'gabor' or 'random')
 		"""
 
-		# initialize subspace distributions
-		for model in self.subspaces:
-			model.initialize()
-
 		if method.lower() == 'data':
 			# initialize features with data points
 			if X is not None:
 				# center data
-				l = 1. / 20.
 				self.A = X[:, randint(X.shape[1], size=self.num_hiddens)] / sqrt(self.num_hiddens)
-				self.A = (1. - l) * self.A + l * randn(*self.A.shape)
+				self.A /= sqrt(sum(square(self.A), 0))
 
 		elif method.lower() == 'gabor':
 			# initialize features with Gabor filters
@@ -77,9 +76,6 @@ class ISA(Distribution):
 				for i in range(len(self.subspaces)):
 					self.A[:, i] = gaborf(self.num_visibles, complex=False)
 
-			if data is not None:
-				dot(pinv(self.A), X)
-
 		elif method.lower() == 'random':
 			# initialize with Gaussian white noise
 			self.A = randn(num_visibles, num_hiddens)
@@ -89,7 +85,7 @@ class ISA(Distribution):
 
 
 
-	def train(self, X, max_iter=10, method=('sgd', {}), sampling_method=('gibbs', {})):
+	def train(self, X, max_iter=100, method=('sgd', {}), sampling_method=('gibbs', {})):
 		"""
 		@type  max_iter: integer
 		@param max_iter: maximum number of iterations through the dataset
@@ -101,24 +97,27 @@ class ISA(Distribution):
 		@param sampling_method: method to generate hidden representations
 		"""
 
-		print self.evaluate(X) / log(2.)
+		if Distribution.VERBOSITY > 0:
+			print 0, self.evaluate(X) / log(2.)
 
 		for i in range(max_iter):
 			# complete data (E)
 			Y = self.sample_posterior(X, method=sampling_method)
 
 			# optimize parameters with respect to completed data (M)
-			self.train_sgd(Y, **method[1])
-			if i > 30:
+			if i >= 30:
 				self.train_prior(Y)
+			self.train_sgd(Y, **method[1])
 
-			print self.evaluate(X) / log(2.)
+			if Distribution.VERBOSITY > 0:
+				print i + 1, self.evaluate(X) / log(2.)
 
 
 
 	def train_prior(self, Y, **kwargs):
 		for model in self.subspaces:
 			model.train(Y[:model.dim])
+			model.normalize()
 			Y = Y[model.dim:]
 
 
@@ -148,7 +147,7 @@ class ISA(Distribution):
 				if not batch.shape[1] < batch_size:
 					# calculate gradient
 					P = momentum * P + A.T - \
-						dot(self.energy_gradient(dot(W, batch)), batch.T) / batch_size
+						dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size
 
 					# update parameters
 					W += step_width * P
@@ -291,7 +290,7 @@ class ISA(Distribution):
 			Y = asshmarray(Wx + dot(Q, Y + Y_))
 
 			if Distribution.VERBOSITY > 1:
-				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.energy(Y)))
+				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.prior_energy(Y)))
 
 		return asarray(Y)
 
@@ -316,22 +315,22 @@ class ISA(Distribution):
 
 			# store Hamiltonian
 			Zold = copy(Z)
-			Hold = self.energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
+			Hold = self.prior_energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
 
 			# first half-step
-			P -= lf_step_size / 2. * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
+			P -= lf_step_size / 2. * dot(B, self.prior_energy_gradient(Y + dot(B.T, Z)))
 			Z += lf_step_size * P
 
 			# full leapfrog steps
 			for _ in range(lf_num_steps - 1):
-				P -= lf_step_size * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
+				P -= lf_step_size * dot(B, self.prior_energy_gradient(Y + dot(B.T, Z)))
 				Z += lf_step_size * P
 
 			# final half-step
-			P -= lf_step_size / 2. * dot(B, self.energy_gradient(Y + dot(B.T, Z)))
+			P -= lf_step_size / 2. * dot(B, self.prior_energy_gradient(Y + dot(B.T, Z)))
 
 			# new Hamiltonian
-			Hnew = self.energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
+			Hnew = self.prior_energy(Y + dot(B.T, Z)) + sum(square(P), 0) / 2.
 
 			# Metropolis accept/reject step
 			reject = (rand(1, Z.shape[1]) > exp(Hold - Hnew)).flatten()
@@ -339,7 +338,7 @@ class ISA(Distribution):
 
 			if Distribution.VERBOSITY > 1:
 				print '{0:6}\t{1:10.2f}\t{2:10.2f}'.format(step + 1,
-					mean(self.energy(Y + dot(B.T, Z))),
+					mean(self.prior_energy(Y + dot(B.T, Z))),
 					mean(-reject))
 
 		return Y + dot(B.T, Z)
@@ -360,12 +359,12 @@ class ISA(Distribution):
 
 		for step in range(num_steps):
 			Zold = copy(Z)
-			Eold = self.energy(Y + dot(B.T, Z))
+			Eold = self.prior_energy(Y + dot(B.T, Z))
 
 			Z += standard_deviation * randn(*Z.shape)
 
 			# new Hamiltonian
-			Enew = self.energy(Y + dot(B.T, Z))
+			Enew = self.prior_energy(Y + dot(B.T, Z))
 
 			# Metropolis accept/reject step
 			reject = (log(rand(1, Z.shape[1])) > Eold - Enew).flatten()
@@ -373,13 +372,13 @@ class ISA(Distribution):
 
 			if Distribution.VERBOSITY > 1:
 				print '{0:6}{1:10.2f}{2:10.2f}'.format(step + 1,
-					mean(self.energy(Y + dot(B.T, Z))), 1. - mean(reject))
+					mean(self.prior_energy(Y + dot(B.T, Z))), 1. - mean(reject))
 
 		return Y + dot(B.T, Z)
 
 
 
-	def energy_gradient(self, Y):
+	def prior_energy_gradient(self, Y):
 		"""
 		Gradient of log-likelihood with respect to hidden state.
 		"""
@@ -395,10 +394,9 @@ class ISA(Distribution):
 
 
 
-	# TODO: rename energy and loglikelihood
-	def energy(self, Y):
+	def prior_energy(self, Y):
 		"""
-		Free energy of hidden state.
+		For given hidden states, calculates the negative log-probability plus some constant.
 		"""
 
 		energy = zeros([1, Y.shape[1]])
@@ -411,7 +409,11 @@ class ISA(Distribution):
 
 
 
-	def loglikelihood(self, Y):
+	def prior_loglikelihood(self, Y):
+		"""
+		Calculates the log-probability of hidden states.
+		"""
+
 		energy = zeros([1, Y.shape[1]])
 
 		for model in self.subspaces:
@@ -422,9 +424,9 @@ class ISA(Distribution):
 
 
 
-	def evaluate(self, X):
+	def loglikelihood(self, X):
 		if self.num_hiddens == self.num_visibles:
 			W = inv(self.A)
-			return (-mean(self.loglikelihood(dot(W, X))) - slogdet(W)[1]) / X.shape[0]
+			return (-mean(self.prior_loglikelihood(dot(W, X))) - slogdet(W)[1]) / X.shape[0]
 		else:
 			raise NotImplementedError()
