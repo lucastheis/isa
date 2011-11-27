@@ -14,7 +14,7 @@ from scipy.stats import gamma
 from utils import logmeanexp, logsumexp
 
 class GSM(Distribution):
-	def __init__(self, dim=1, num_scales=8):
+	def __init__(self, dim=1, num_scales=4):
 		self.dim = dim
 		self.num_scales = num_scales
 
@@ -24,7 +24,7 @@ class GSM(Distribution):
 
 
 
-	def initialize(self, method='student'):
+	def initialize(self, method='cauchy'):
 		if method.lower() == 'student':
 			# sample scales using the Gamma distribution
 			self.scales = 1. / sqrt(gamma.rvs(1, 0, 1, size=self.num_scales))
@@ -137,7 +137,7 @@ class GSM(Distribution):
 
 		# compute unnormalized log-likelihoods
 		sqnorms = sum(square(data), 0).reshape(1, -1)
-		uloglik = -0.5 * sqnorms / square(scales) - self.dim * log(scales) # TODO: do we need this here?
+		uloglik = -0.5 * sqnorms / square(scales) - self.dim * log(scales)
 
 		# average over scales
 		return -logmeanexp(uloglik, 0)
@@ -150,11 +150,11 @@ class GSM(Distribution):
 		# compute posterior over scales
 		sqnorms = sum(square(data), 0).reshape(1, -1)
 
-		# less stable but faster
+		# faster but less stable
 #		post = exp(-0.5 * sqnorms / square(scales) - self.dim * log(scales))
 #		post /= sum(post, 0)
 
-		# more stable but slower
+		# slower but more stable
 		post = -0.5 * sqnorms / square(scales) - self.dim * log(scales)
 		post = exp(post - logsumexp(post, 0))
 

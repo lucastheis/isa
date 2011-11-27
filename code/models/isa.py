@@ -8,13 +8,15 @@ __docformat__ = 'epytext'
 
 from distribution import Distribution
 from numpy import *
-from numpy import max
+from numpy import max, round
 from numpy.random import randint, randn, rand
 from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
 from tools import gaborf, mapp
 from tools.shmarray import asshmarray
 from gsm import GSM
+from copy import deepcopy
+from utils import logmeanexp
 
 class ISA(Distribution):
 	"""
@@ -243,6 +245,9 @@ class ISA(Distribution):
 		elif method[0].lower() == 'metropolis':
 			return self.sample_posterior_metropolis(X, **method[1])
 
+		elif method[0].lower() == 'ais':
+			return self.sample_posterior_ais(X, **method[1])[0]
+
 		else:
 			raise ValueError('Unknown sampling method \'{0}\'.'.format(method))
 
@@ -260,39 +265,121 @@ class ISA(Distribution):
 
 
 	def sample_posterior_gibbs(self, X, num_steps=10, Y=None):
+		"""
+		B{References:}
+			- Doucet, A. (2010). I{A Note on Efficient Conditional Simulation of
+			Gaussian Distributions.}
+		"""
+
 		# filter matrix and filter responses
 		W = pinv(self.A)
-		Wx = dot(W, X)
+		WX = dot(W, X)
 
 		# nullspace projection matrix
 		Q = eye(self.num_hiddens) - dot(W, self.A)
 
 		# initial hidden state
-		Y = asshmarray(Wx + dot(Q, Y)) if Y is not None else \
-			asshmarray(Wx + dot(Q, self.sample_prior(X.shape[1])))
+		Y = WX + dot(Q, Y) if Y is not None else \
+			WX + dot(Q, self.sample_prior(X.shape[1]))
 
+		# Gibbs sample between S and Y given X
 		for step in range(num_steps):
 			# update scales
 			S = self.sample_scales(Y)
 
-			# sample from prior conditioned on scales
-			Y_ = multiply(randn(self.num_hiddens, X.shape[1]), S)
-			X_ = X - dot(self.A, Y_)
-
-			# variances and partial covariances
-			v = square(S).reshape(-1, 1, X.shape[1])
-			C = multiply(v, self.A.T.reshape(self.num_hiddens, -1, 1)).transpose([2, 0, 1])
-
-			# update hidden state
-			def parfor(i):
-				Y[:, i] = dot(C[i], solve(dot(self.A, C[i]), X_[:, i], sym_pos=True))
-			mapp(parfor, range(X.shape[1]))
-			Y = asshmarray(Wx + dot(Q, Y + Y_))
+			# update hidden states
+			Y = self._sample_posterior_cond(Y, X, S, W, WX, Q)
 
 			if Distribution.VERBOSITY > 1:
 				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.prior_energy(Y)))
 
 		return asarray(Y)
+
+
+
+	def sample_posterior_ais(self, X, num_steps=10, ais_weights=None):
+		if ais_weights is None:
+			if num_steps > 0:
+				annealing_weights = linspace(0, 1, num_steps + 1)[1:]
+#				annealing_weights = 1. - log(annealing_weights) / log(annealing_weights[0])
+			else:
+				annealing_weights = []
+
+		# initialize proposal distribution to Gaussian
+		model = deepcopy(self)
+		for gsm in model.subspaces:
+			gsm.scales[:] = 1.
+
+		# filter matrix and filter responses
+		W = pinv(self.A)
+		WX = dot(W, X)
+
+		# nullspace basis and projection matrix
+		B = svd(self.A)[2][self.num_visibles:, :]
+		Q = dot(B.T, B)
+		V = pinv(B)
+
+		# initialize proposal samples (X and Z are independent under the initial model)
+		Z = dot(B, model.sample_prior(X.shape[1]))
+		Y = WX + dot(V, Z)
+
+		# initialize importance weights
+		C = dot(B, B.T)
+		log_partf = 0.5 * slogdet(C)[1] + self.num_visibles / 2. * log(2. * pi)
+		log_is_weights = 0.5 * sum(multiply(Z, dot(inv(C), Z)), 0) + log_partf
+		log_is_weights = log_is_weights.reshape(1, -1)
+
+		for step, beta in enumerate(annealing_weights):
+			# tune proposal distribution
+			for i in range(len(self.subspaces)):
+				model.subspaces[i].scales = (1. - beta) + beta * self.subspaces[i].scales
+
+			log_is_weights -= model.prior_energy(Y)
+
+			# apply Gibbs sampling transition operator
+			S = model.sample_scales(Y)
+			Y = model._sample_posterior_cond(Y, X, S, W, WX, Q)
+
+			log_is_weights += model.prior_energy(Y)
+
+			if Distribution.VERBOSITY > 1:
+				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.prior_energy(Y)))
+
+		log_is_weights += self.prior_loglikelihood(Y)
+		log_is_weights += (slogdet(dot(W.T, W))[1] + slogdet(dot(V.T, V))[1]) / 2.
+
+		return Y, log_is_weights
+			
+
+
+	def _sample_posterior_cond(self, Y, X, S, W, WX, Q):
+		"""
+		Samples posterior conditioned on scales. Ugly, but efficient.
+
+		B{References:}
+			- Doucet, A. (2010). I{A Note on Efficient Conditional Simulation of
+			Gaussian Distributions.}
+		"""
+
+		# sample hidden states conditioned on scales
+		Y_ = multiply(randn(self.num_hiddens, X.shape[1]), S)
+
+		X_ = X - dot(self.A, Y_)
+
+		# variances and incomplete covariance matrices
+		v = square(S).reshape(-1, 1, X.shape[1])
+		C = multiply(v, self.A.T.reshape(self.num_hiddens, -1, 1)).transpose([2, 0, 1])
+
+		# update hidden states
+		Y = asshmarray(Y)
+		def parfor(i):
+			Y[:, i] = dot(C[i], solve(dot(self.A, C[i]), X_[:, i], sym_pos=True))
+		mapp(parfor, range(X.shape[1]))
+
+		return WX + dot(Q, Y + Y_)
+
+
+
 
 
 
@@ -309,9 +396,9 @@ class ISA(Distribution):
 			Y = self.sample_prior(X.shape[1])
 
 		# make sure hidden and visible states are consistent
-		Y0 = dot(pinv(self.A), X)
+		WX = dot(pinv(self.A), X)
 		BB = dot(B.T, B)
-		Y = Y0 + dot(BB, Y)
+		Y = Wx + dot(BB, Y)
 
 		for step in range(num_steps):
 			# sample momentum
@@ -334,7 +421,7 @@ class ISA(Distribution):
 			P -= lf_step_size / 2. * dot(B, self.prior_energy_gradient(Y))
 
 			# make sure hidden and visible state stay consistent
-			Y = Y0 + dot(BB, Y)
+			Y = WX + dot(BB, Y)
 
 			# new Hamiltonian
 			Hnew = self.prior_energy(Y) + sum(square(P), 0) / 2.
@@ -363,16 +450,16 @@ class ISA(Distribution):
 		Z = dot(B, Y) if Y is not None else \
 			dot(B, self.sample_prior(X.shape[1]))
 
-		Y0 = dot(pinv(self.A), X)
+		WX = dot(pinv(self.A), X)
 
 		for step in range(num_steps):
 			Zold = copy(Z)
-			Eold = self.prior_energy(Y0 + dot(B.T, Z))
+			Eold = self.prior_energy(WX + dot(B.T, Z))
 
 			Z += standard_deviation * randn(*Z.shape)
 
 			# new Hamiltonian
-			Enew = self.prior_energy(Y0 + dot(B.T, Z))
+			Enew = self.prior_energy(WX + dot(B.T, Z))
 
 			# Metropolis accept/reject step
 			reject = (log(rand(1, Z.shape[1])) > Eold - Enew).flatten()
@@ -380,15 +467,11 @@ class ISA(Distribution):
 
 			if Distribution.VERBOSITY > 1:
 				print '{0:6}{1:10.2f}{2:10.2f}'.format(step + 1,
-					mean(self.prior_energy(Y + dot(B.T, Z))), 1. - mean(reject))
+					mean(self.prior_energy(WX + dot(B.T, Z))), 1. - mean(reject))
 
-		return Y0 + dot(B.T, Z)
-
-
-
-	def sample_posterior_ais(self, X, **kwargs):
-
-
+		return WX + dot(B.T, Z)
+			
+			
 
 	def prior_energy_gradient(self, Y):
 		"""
@@ -436,9 +519,16 @@ class ISA(Distribution):
 
 
 
-	def loglikelihood(self, X):
+	def loglikelihood(self, X, num_samples=10, num_steps=10):
 		if self.num_hiddens == self.num_visibles:
 			W = inv(self.A)
 			return (-mean(self.prior_loglikelihood(dot(W, X))) - slogdet(W)[1]) / X.shape[0]
+
 		else:
-			raise NotImplementedError()
+			log_is_weights = asshmarray(empty([num_samples, X.shape[1]]))
+
+			def parfor(i):
+				log_is_weights[i] = self.sample_posterior_ais(X, num_steps=num_steps)[1]
+			mapp(parfor, range(num_samples))
+
+			return logmeanexp(log_is_weights, 0)

@@ -7,17 +7,21 @@ import sys
 sys.path.append('./code')
 
 from numpy import *
+from numpy import round, max, min
 from numpy.random import *
 from numpy.random import seed as np_seed
+from numpy.linalg import *
 from random import seed as py_seed
 from models import ISA, GSM, Distribution
 from tools.patchutil import show
 from tools import contours
 from tools.mapp import mapp
-from matplotlib.pyplot import *
+from pgf import *
 from time import time
 
-Distribution.VERBOSITY = 2
+mapp.max_processes = 8
+
+Distribution.VERBOSITY = 0
 
 # sampling methods with parameters
 methods = [
@@ -30,14 +34,15 @@ methods = [
 	('metropolis', {
 		'num_steps': 5000,
 		'standard_deviation': 0.03}),
+	('ais', {
+		'num_steps': 20}),
 	]
 
 def main(argv):
-	py_seed(1)
-	np_seed(1)
+#	py_seed(1)
+#	np_seed(1)
 
-	m = ISA(1, 2, 1)
-	m.initialize()
+	m = ISA(4, 8, 2)
 
 	Y = m.sample_prior(5000)
 
@@ -45,24 +50,19 @@ def main(argv):
 	print '\t{0:.2f}'.format(mean(m.prior_energy(Y)))
 	print
 
-	# plot prior
-	plot(Y[0], Y[1], '.')
-
 	# sample posterior
 	X = dot(m.A, Y)
-#	X = zeros(X.shape) + 2
-	t = time()
-	Y = m.sample_posterior(X, method=methods[2])
+	C = dot(m.A, m.A.T)
+	logl = -0.5 * sum(multiply(X, dot(inv(C), X)), 0) \
+		- 0.5 * slogdet(C)[1]  - m.num_visibles / 2. * log(2.  * pi)
+	logl = logl.reshape(1, -1)
+
+	Y, logw = m.sample_posterior_ais(X, num_steps=2)
+
+	logl = m.loglikelihood(X, num_samples=40, num_steps=10)
 
 	print
-	print '{0:.2f} seconds'.format(time() - t)
-
-	# plot posterior
-	plot(Y[0], Y[1], 'r.')
-	axis('equal')
-	axis([-5, 5, -5, 5])
-
-	raw_input()
+	print '\t{0:.2f}'.format(mean(exp(logw - logl) * m.prior_energy(Y)))
 
 	return 0
 
