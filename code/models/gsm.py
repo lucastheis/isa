@@ -14,7 +14,7 @@ from scipy.stats import gamma
 from utils import logmeanexp, logsumexp
 
 class GSM(Distribution):
-	def __init__(self, dim=1, num_scales=4):
+	def __init__(self, dim=1, num_scales=8):
 		self.dim = dim
 		self.num_scales = num_scales
 

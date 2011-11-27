@@ -8,9 +8,12 @@ from numpy import zeros, all, abs
 
 class Tests(unittest.TestCase):
 	def test_prior_energy(self):
-		step_size = 1E-4
+		step_size = 1E-5
 
-		model = ISA(3, 7)
+		model = ISA(3, 7, 1)
+
+		for gsm in model.subspaces:
+			gsm.initialize('student')
 
 		# samples and true gradient
 		X = model.sample_prior(100)

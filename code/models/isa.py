@@ -100,19 +100,25 @@ class ISA(Distribution):
 		"""
 
 		if Distribution.VERBOSITY > 0:
-			print 0, self.evaluate(X) / log(2.)
+			if self.num_hiddens > self.num_visibles:
+				print 0
+			else:
+				print 0, self.evaluate(X)
 
 		for i in range(max_iter):
 			# complete data (E)
 			Y = self.sample_posterior(X, method=sampling_method)
 
 			# optimize parameters with respect to completed data (M)
-			if i >= 30:
-				self.train_prior(Y)
 			self.train_sgd(Y, **method[1])
+			if i >= max_iter / 2:
+				self.train_prior(Y)
 
 			if Distribution.VERBOSITY > 0:
-				print i + 1, self.evaluate(X) / log(2.)
+				if self.num_hiddens > self.num_visibles:
+					print i + 1
+				else:
+					print i + 1, self.evaluate(X)
 
 
 
@@ -509,20 +515,19 @@ class ISA(Distribution):
 		Calculates the log-probability of hidden states.
 		"""
 
-		energy = zeros([1, Y.shape[1]])
+		loglik = zeros([1, Y.shape[1]])
 
 		for model in self.subspaces:
-			energy += model.loglikelihood(Y[:model.dim])
+			loglik += model.loglikelihood(Y[:model.dim])
 			Y = Y[model.dim:]
 
-		return energy
+		return loglik
 
 
 
 	def loglikelihood(self, X, num_samples=10, num_steps=10):
 		if self.num_hiddens == self.num_visibles:
-			W = inv(self.A)
-			return (-mean(self.prior_loglikelihood(dot(W, X))) - slogdet(W)[1]) / X.shape[0]
+			return self.prior_loglikelihood(dot(inv(self.A), X)) - slogdet(self.A)[1]
 
 		else:
 			log_is_weights = asshmarray(empty([num_samples, X.shape[1]]))
