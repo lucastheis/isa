@@ -303,13 +303,10 @@ class ISA(Distribution):
 
 
 
-	def sample_posterior_ais(self, X, num_steps=10, ais_weights=None):
-		if ais_weights is None:
-			if num_steps > 0:
-				annealing_weights = linspace(0, 1, num_steps + 1)[1:]
-#				annealing_weights = 1. - log(annealing_weights) / log(annealing_weights[0])
-			else:
-				annealing_weights = []
+	def sample_posterior_ais(self, X, num_steps=10, annealing_weights=[]):
+		if not annealing_weights:
+			annealing_weights = linspace(0, 1, num_steps + 1)[1:]
+#			annealing_weights = 1. - log(annealing_weights) / log(annealing_weights[0])
 
 		# initialize proposal distribution to Gaussian
 		model = deepcopy(self)
@@ -323,17 +320,15 @@ class ISA(Distribution):
 		# nullspace basis and projection matrix
 		B = svd(self.A)[2][self.num_visibles:, :]
 		Q = dot(B.T, B)
-		V = pinv(B)
 
-		# initialize proposal samples (X and Z are independent under the initial model)
-		Z = dot(B, model.sample_prior(X.shape[1]))
-		Y = WX + dot(V, Z)
+		# initialize proposal samples (X and Z are initially independent and Gaussian)
+		Z = dot(B, randn(self.num_hiddens, X.shape[1]))
+		Y = WX + dot(pinv(B), Z)
 
 		# initialize importance weights
-		C = dot(B, B.T)
-		log_partf = 0.5 * slogdet(C)[1] + self.num_visibles / 2. * log(2. * pi)
-		log_is_weights = 0.5 * sum(multiply(Z, dot(inv(C), Z)), 0) + log_partf
-		log_is_weights = log_is_weights.reshape(1, -1)
+		log_is_weights = sum(multiply(Z, dot(inv(dot(B, B.T)), Z)), 0) / 2. \
+			+ (self.num_hiddens - self.num_visibles) / 2. * log(2. * pi) + slogdet(dot(W.T, W))[1] / 2.
+		log_is_weights.resize(1, X.shape[1])
 
 		for step, beta in enumerate(annealing_weights):
 			# tune proposal distribution
@@ -352,7 +347,6 @@ class ISA(Distribution):
 				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.prior_energy(Y)))
 
 		log_is_weights += self.prior_loglikelihood(Y)
-		log_is_weights += (slogdet(dot(W.T, W))[1] + slogdet(dot(V.T, V))[1]) / 2.
 
 		return Y, log_is_weights
 			

@@ -72,7 +72,7 @@ class Distribution(object):
 
 
 
-	def evaluate(self, data):
+	def evaluate(self, data, **kwargs):
 		"""
 		Return average negative log-likelihood per dimension in nats.
 
@@ -80,7 +80,7 @@ class Distribution(object):
 		@param data: data stored in columns
 		"""
 
-		return -mean(self.loglikelihood(data)) / data.shape[0]
+		return -mean(self.loglikelihood(data, **kwargs)) / data.shape[0]
 
 
 
