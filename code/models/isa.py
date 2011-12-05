@@ -9,7 +9,7 @@ __docformat__ = 'epytext'
 from distribution import Distribution
 from numpy import *
 from numpy import max, round
-from numpy.random import randint, randn, rand
+from numpy.random import randint, randn, rand, logseries
 from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
 from tools import gaborf, mapp
@@ -519,15 +519,60 @@ class ISA(Distribution):
 
 
 
-	def loglikelihood(self, X, num_samples=10, num_steps=10):
+	def loglikelihood(self, X, num_samples=10, num_steps=10, method='biased'):
 		if self.num_hiddens == self.num_visibles:
 			return self.prior_loglikelihood(dot(inv(self.A), X)) - slogdet(self.A)[1]
 
 		else:
-			log_is_weights = asshmarray(empty([num_samples, X.shape[1]]))
+			if method == 'biased':
+				# sample importance weights
+				log_is_weights = asshmarray(empty([num_samples, X.shape[1]]))
+				def parfor(i):
+					log_is_weights[i] = self.sample_posterior_ais(X, num_steps=num_steps)[1]
+				mapp(parfor, range(num_samples))
 
-			def parfor(i):
-				log_is_weights[i] = self.sample_posterior_ais(X, num_steps=num_steps)[1]
-			mapp(parfor, range(num_samples))
+				# average importance weights to get likelihoods
+				return logmeanexp(log_is_weights, 0)
 
-			return logmeanexp(log_is_weights, 0)
+			elif method == 'unbiased':
+				loglik = empty(X.shape[1])
+
+				# sample importance weights
+				log_is_weights = asshmarray(empty([5, X.shape[1]]))
+				def parfor(i):
+					log_is_weights[i] = self.sample_posterior_ais(X, num_steps=num_steps)[1]
+				mapp(parfor, range(5))
+
+				# obtain an initial first guess using the biased method
+				l = exp(log_is_weights)
+				m = mean(l, 0)
+				v = var(l, 0, ddof=1)
+
+				# Taylor series expansion points
+				c = (v + square(m)) / m
+
+				# logarithmic series distribution parameters
+				params = sqrt(v / (v + square(m)))
+
+				# number of importance samples for each data point
+				num_samples = array([logseries(q) for q in params], dtype='uint32')
+
+				for k in range(1, max(num_samples) + 1):
+					indices = where(num_samples == k)[0]
+
+					if len(indices) > 0:
+						log_is_weights = asshmarray(empty([k, len(indices)]))
+
+						def parfor(i):
+							log_is_weights[i] = self.sample_posterior_ais(X[:, indices], num_steps=num_steps)[1]
+						mapp(parfor, range(k))
+
+						c_ = c[indices].reshape(1, -1)
+						q_ = params[indices].reshape(1, -1)
+
+						loglik[indices] = log(c_) + log(1. - q_) * prod((c_ - exp(log_is_weights)) / (c_ * q_), 0)
+
+				return loglik.reshape(1, -1)
+
+			else:
+				raise NotImplementedError('Unknown method \'{0}\'.'.format(method))

@@ -21,11 +21,13 @@ def main(argv):
 	num_samples = int(argv[2]) if len(argv) > 2 else 400
 	num_steps = int(argv[3]) if len(argv) > 3 else 20
 
+	results = Experiment('results/experiment02a/experiment02a.xpck')
+
 	# load Gaussian scale mixture
-	gsm = Experiment('results/experiment02a/experiment02a.xpck')['gsm']
+	gsm = results['gsm']
 
 	# generate data
-	data = gsm.sample(100000)
+	data = results['data']
 
 	# train overcomplete ICA model
 	ica = ISA(gsm.dim, num_hiddens, 1)

@@ -14,7 +14,7 @@ from scipy.stats import gamma
 from utils import logmeanexp, logsumexp
 
 class GSM(Distribution):
-	def __init__(self, dim=1, num_scales=8):
+	def __init__(self, dim=1, num_scales=20):
 		self.dim = dim
 		self.num_scales = num_scales
 
@@ -24,7 +24,7 @@ class GSM(Distribution):
 
 
 
-	def initialize(self, method='cauchy'):
+	def initialize(self, method='student'):
 		if method.lower() == 'student':
 			# sample scales using the Gamma distribution
 			self.scales = 1. / sqrt(gamma.rvs(1, 0, 1, size=self.num_scales))

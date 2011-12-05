@@ -42,5 +42,5 @@ def contours(data, bins=20, levels=10, threshold=3., **kwargs):
 	Y = (Y[1:] + Y[:-1]) / 2.
 
 	# contour plot of histogram
-	contour(X, Y, Z.T, levels, **kwargs)
+	contour(X, Y, Z, levels, **kwargs)
 	draw()

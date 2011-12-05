@@ -22,7 +22,10 @@ def main(argv):
 	gsm = GSM(2, 20)
 	gsm.initialize('student')
 
+	data = gsm.sample(100000)
+
 	# store results
+	experiment['data'] = data
 	experiment['gsm'] = gsm
 	experiment.save('results/experiment02a/experiment02a.xpck')
 
