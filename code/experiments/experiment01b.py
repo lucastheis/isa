@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Train ISA model on whitened natural images patches.
+Train ISA model on natural images patches with noise added.
 """
 
 import sys
@@ -9,23 +9,27 @@ import sys
 sys.path.append('./code')
 
 from numpy import *
+from numpy.random import randn
 from models import ISA, GSM
 from tools import preprocess, Experiment
 
 # patch size, subspace size, overcompleteness
 parameters = [
-	['8x8', 1, 1, 50, 100],
-	['8x8', 1, 2, 50, 100],
+	['8x8',   1, 1, 100, 100, 32.],
+	['10x10', 1, 1, 100, 100, 32.],
+	['12x12', 1, 1, 100, 100, 32.],
+	['14x14', 1, 1, 100, 100, 32.],
+	['16x16', 1, 1, 100, 100, 32.],
 ]
 
 def main(argv):
 	if len(argv) < 2:
 		print 'Usage:', argv[0], '<params_id>'
 		print
-		print '  {0:>3} {1:>5} {2:>3} {3:>3} {4:>5} {5:>4}'.format('ID', 'PS', 'SS', 'OC', 'ND', 'MI')
+		print '  {0:>3} {1:>5} {2:>3} {3:>3} {4:>5} {5:>4} {6:>4}'.format('ID', 'PS', 'SS', 'OC', 'ND', 'MI', 'NS')
 
 		for id, params in enumerate(parameters):
-			print ' {0:>3} {1:>5} {2:>3} {3:>3} {4:>4}k {5:>4}'.format(id, *params)
+			print '  {0:>3} {1:>5} {2:>3} {3:>3} {4:>4}k {5:>4} {6:>4.0f}'.format(id, *params)
 
 		print
 		print '  ID = parameter set'
@@ -34,29 +38,35 @@ def main(argv):
 		print '  OC = overcompleteness'
 		print '  ND = number of training points'
 		print '  MI = maximum number of training epochs'
+		print '  NS = inverse noise level' 
 
 		return 0
 
 	seterr(invalid='raise', over='raise', divide='raise')
 
 	# some hyperparameters
-	patch_size, ssize, overcompleteness, num_data, max_iter = parameters[int(argv[1])]
+	patch_size, ssize, overcompleteness, num_data, max_iter, noise_factor = parameters[int(argv[1])]
 	num_data *= 1000
 
 	experiment = Experiment()
 
 	# load and whiten data
 	data = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
-	data = preprocess(data)
+	data = asarray(data, dtype='float64')
+
+	# normalize data and add noise
+	data -= mean(data)
+	data /= std(data)
+	data += randn(*data.shape) / float(noise_factor)
 
 	# create and train model
 	model = ISA(data.shape[0], data.shape[0] * overcompleteness, ssize=ssize)
-	model.train(data[:, :num_data])
+	model.train(data[:, :num_data], max_iter=max_iter)
 
 	# save results
 	experiment['model'] = model
 	experiment['parameters'] = parameters[int(argv[1])]
-	experiment.save('results/experiment01a/experiment01a.{0}.{1}.xpck')
+	experiment.save('results/experiment01b/experiment01b.{0}.{1}.xpck')
 
 	return 0
 

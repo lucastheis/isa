@@ -6,7 +6,7 @@ __license__ = 'MIT License <http://www.opensource.org/licenses/mit-license.php>'
 __author__ = 'Lucas Theis <lucas@bethgelab.org>'
 __docformat__ = 'epytext'
 
-from numpy import mean
+from numpy import mean, log
 
 class Distribution(object):
 	"""
@@ -74,13 +74,13 @@ class Distribution(object):
 
 	def evaluate(self, data, **kwargs):
 		"""
-		Return average negative log-likelihood per dimension in nats.
+		Return average negative log-likelihood in bits per component.
 
 		@type  data: array_like
 		@param data: data stored in columns
 		"""
 
-		return -mean(self.loglikelihood(data, **kwargs)) / data.shape[0]
+		return -mean(self.loglikelihood(data, **kwargs)) / data.shape[0] / log(2.)
 
 
 
