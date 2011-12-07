@@ -109,8 +109,12 @@ class ISA(Distribution):
 			# complete data (E)
 			Y = self.sample_posterior(X, method=sampling_method)
 
-			# optimize parameters with respect to completed data (M)
+			sampling_method[1]['Y'] = Y
+
+			# optimize linear features (M)
 			self.train_sgd(Y, **method[1])
+
+			# optimize parameters of the prior (M)
 			if i >= max_iter / 2:
 				self.train_prior(Y)
 
@@ -123,6 +127,15 @@ class ISA(Distribution):
 
 
 	def train_prior(self, Y, **kwargs):
+		"""
+		Optimize parameters of the marginal distribution over the hidden variables.
+		The parameters are fit to maximize the average log-likelihood of the
+		columns in `Y`.
+
+		@type  Y: array_like
+		@param Y: hidden states
+		"""
+
 		for model in self.subspaces:
 			model.train(Y[:model.dim])
 			model.normalize()
@@ -131,6 +144,11 @@ class ISA(Distribution):
 
 
 	def train_sgd(self, Y, **kwargs):
+		"""
+		Optimize linear features to maximize the joint log-likelihood of visible
+		and nullspace states (given by the hidden representation).
+		"""
+
 		max_iter = kwargs.get('max_iter', 1)
 		batch_size = kwargs.get('batch_size', 100)
 		step_width = kwargs.get('step_width', 0.001)
@@ -304,9 +322,13 @@ class ISA(Distribution):
 
 
 	def sample_posterior_ais(self, X, num_steps=10, annealing_weights=[]):
+		"""
+		Sample posterior distribution over hidden states using annealed importance
+		sampling with Gibbs sampling transition operator.
+		"""
+
 		if not annealing_weights:
 			annealing_weights = linspace(0, 1, num_steps + 1)[1:]
-#			annealing_weights = 1. - log(annealing_weights) / log(annealing_weights[0])
 
 		# initialize proposal distribution to Gaussian
 		model = deepcopy(self)
@@ -333,6 +355,7 @@ class ISA(Distribution):
 		for step, beta in enumerate(annealing_weights):
 			# tune proposal distribution
 			for i in range(len(self.subspaces)):
+				# adjust standard deviations
 				model.subspaces[i].scales = (1. - beta) + beta * self.subspaces[i].scales
 
 			log_is_weights -= model.prior_energy(Y)
@@ -377,9 +400,6 @@ class ISA(Distribution):
 		mapp(parfor, range(X.shape[1]))
 
 		return WX + dot(Q, Y + Y_)
-
-
-
 
 
 
@@ -520,6 +540,12 @@ class ISA(Distribution):
 
 
 	def loglikelihood(self, X, num_samples=10, num_steps=10, method='biased'):
+		"""
+		@param num_steps: number of MCMC steps used to sample from posterior
+
+		@param num_samples: number of generated importance weights
+		"""
+
 		if self.num_hiddens == self.num_visibles:
 			return self.prior_loglikelihood(dot(inv(self.A), X)) - slogdet(self.A)[1]
 
@@ -538,28 +564,30 @@ class ISA(Distribution):
 				loglik = empty(X.shape[1])
 
 				# sample importance weights
-				log_is_weights = asshmarray(empty([5, X.shape[1]]))
+				log_is_weights = asshmarray(empty([num_samples, X.shape[1]]))
 				def parfor(i):
 					log_is_weights[i] = self.sample_posterior_ais(X, num_steps=num_steps)[1]
-				mapp(parfor, range(5))
+				mapp(parfor, range(num_samples))
 
 				# obtain an initial first guess using the biased method
-				l = exp(log_is_weights)
-				m = mean(l, 0)
-				v = var(l, 0, ddof=1)
+				is_weights = exp(log_is_weights)
+				is_mean = mean(is_weights, 0)
+				is_var = var(is_weights, 0, ddof=1)
 
 				# Taylor series expansion points
-				c = (v + square(m)) / m
+				c = (is_var + square(is_mean)) / is_mean
 
 				# logarithmic series distribution parameters
-				params = sqrt(v / (v + square(m)))
+				p = sqrt(is_var / (is_var + square(is_mean)))
 
-				# number of importance samples for each data point
-				num_samples = array([logseries(q) for q in params], dtype='uint32')
+				# sample "number of importance samples" for each data point
+				num_samples = array([logseries(p_) for p_ in p], dtype='uint32')
 
 				for k in range(1, max(num_samples) + 1):
+					# data points for which to generate k importance weights
 					indices = where(num_samples == k)[0]
 
+					# sample importance weights
 					if len(indices) > 0:
 						log_is_weights = asshmarray(empty([k, len(indices)]))
 
@@ -567,12 +595,14 @@ class ISA(Distribution):
 							log_is_weights[i] = self.sample_posterior_ais(X[:, indices], num_steps=num_steps)[1]
 						mapp(parfor, range(k))
 
-						c_ = c[indices].reshape(1, -1)
-						q_ = params[indices].reshape(1, -1)
+						# hyperparameter used for selected datapoints
+						c_ = c[indices]
+						p_ = p[indices]
 
-						loglik[indices] = log(c_) + log(1. - q_) * prod((c_ - exp(log_is_weights)) / (c_ * q_), 0)
+						# unbiased estimate of log-likelihood
+						loglik[indices] = log(c_) + log(1. - p_) * prod((c_ - exp(log_is_weights)) / (c_ * p_), 0)
 
-				return loglik.reshape(1, -1)
+				return mean(loglik, 0).reshape(1, -1)
 
 			else:
 				raise NotImplementedError('Unknown method \'{0}\'.'.format(method))
