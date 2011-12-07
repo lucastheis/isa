@@ -1,63 +1,32 @@
 """
-Visualize random walk in nullspaces.
+Train model on natural images.
 """
 
 import sys
-import pdb
 
 sys.path.append('./code')
 
 from numpy import *
-from models import Distribution, ISA
-from tools import Experiment, contours, mapp
-from matplotlib.pyplot import *
-from numpy.random import seed as np_seed
-from random import seed as py_seed
+from numpy.linalg import *
+from models import ISA, GSM
+from tools import preprocess, patchutil
+from pgf import *
 
-mapp.max_processes = 1
-
-Distribution.VERBOSITY = 0
-
-NUM_VIS = 1
-NUM_HID = 3
-NUM_SAMPLES = 100000
 
 def main(argv):
-	experiment = Experiment(seed=42)
+	data = load('data/vanhateren.8x8.1.npz')['data']
+	data = preprocess(data)
 
-	model = ISA(NUM_VIS, NUM_HID)
-	model.initialize()
+	model = ISA(data.shape[0], data.shape[0], ssize=1)
+	model.train(data[:, :50000])
+	
+	print model.evaluate(data[:, 50000:100000]) / log(2.)
 
-	Z = model.sample_nullspace(zeros([NUM_VIS, NUM_SAMPLES]) + 3.)
-
-	contours(Z,
-		bins=50, 
-		threshold=10, 
-		levels=[0.0025, 0.005, 0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56], 
-		colors='k')
-
-	random_walk = []
-
-	for k in range(300):
-		# reset
-		np_seed(42)
-		py_seed(42)
-
-		random_walk.append(
-			model.sample_nullspace(zeros([NUM_VIS, 1]) + 3, method=('hmc', k)))
-
-	random_walk = hstack(random_walk)
-
-	plot(random_walk[0], random_walk[1], '-r', alpha=0.4)
-	plot(random_walk[0], random_walk[1], '.r', markersize=7)
-	axis('equal')
-	axis([-15, 15, -15, 15])
-	xticks([])
-	yticks([])
-
-	pdb.set_trace()
+#	patchutil.show(model.A.T.reshape(-1, 8, 8))
 
 	return 0
+
+
 
 if __name__ == '__main__':
 	sys.exit(main(sys.argv))
