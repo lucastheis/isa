@@ -9,7 +9,7 @@ __docformat__ = 'epytext'
 from distribution import Distribution
 from numpy import *
 from numpy import max, round
-from numpy.random import randint, randn, rand, logseries
+from numpy.random import randint, randn, rand, logseries, permutation
 from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
 from tools import gaborf, mapp
@@ -20,11 +20,19 @@ from utils import logmeanexp
 
 class ISA(Distribution):
 	"""
-	An implementation of overcomplete ISA.
+	An implementation of overcomplete ISA using Gaussian scale mixtures.
 	"""
 
 	def __init__(self, num_visibles, num_hiddens=None, ssize=1):
 		"""
+		@type  num_visibles: integer
+		@param num_visibles: data dimensionality
+
+		@type  num_hiddens: integer
+		@param num_hiddens: number of hidden units
+
+		@type  ssize: integer
+		@param ssize: subspace dimensionality
 		"""
 
 		if mod(num_hiddens, ssize):
@@ -89,6 +97,8 @@ class ISA(Distribution):
 
 	def train(self, X, max_iter=100, method=('sgd', {}), sampling_method=('gibbs', {})):
 		"""
+		Optimizes model parameters with respect to the log-likelihoood.
+
 		@type  max_iter: integer
 		@param max_iter: maximum number of iterations through the dataset
 
@@ -96,7 +106,7 @@ class ISA(Distribution):
 		@param method: optimization method used to optimize filters
 
 		@type  sampling_method: tuple
-		@param sampling_method: method to generate hidden representations
+		@param sampling_method: method and parameters to generate hidden representations
 		"""
 
 		if Distribution.VERBOSITY > 0:
@@ -109,6 +119,7 @@ class ISA(Distribution):
 			# complete data (E)
 			Y = self.sample_posterior(X, method=sampling_method)
 
+			# used to initialize sampling procedure in next iteration
 			sampling_method[1]['Y'] = Y
 
 			# optimize linear features (M)
@@ -146,13 +157,34 @@ class ISA(Distribution):
 	def train_sgd(self, Y, **kwargs):
 		"""
 		Optimize linear features to maximize the joint log-likelihood of visible
-		and nullspace states (given by the hidden representation).
+		and nullspace states.
+
+		@type  max_iter: integer
+		@param max_iter: maximum number of iterations through data set
+
+		@type  batch_size: integer
+		@param batch_size: number of data points used to approximate gradient
+
+		@type  step_width: float
+		@param step_width: factor by which gradient is multiplied
+
+		@type  momentum: float
+		@param momentum: fraction of previous parameter update added to gradient
+
+		@type  pocket: boolean
+		@param pocket: if true, parameters are kept in case of performance degradation
 		"""
 
 		max_iter = kwargs.get('max_iter', 1)
 		batch_size = kwargs.get('batch_size', 100)
 		step_width = kwargs.get('step_width', 0.001)
 		momentum = kwargs.get('momentum', 0.8)
+		shuffle = kwargs.get('shuffle', True)
+		pocket = kwargs.get('pocket', shuffle)
+
+		if shuffle:
+			# randomize order of data
+			Y = Y[:, permutation(Y.shape[1])]
 
 		# nullspace basis
 		B = svd(self.A)[2][self.num_visibles:, :]
@@ -164,7 +196,11 @@ class ISA(Distribution):
 		# completed data
 		XZ = dot(A, Y)
 
+		# initial direction of momentum
 		P = 0.
+
+		if pocket:
+			energy = mean(self.prior_energy(dot(W, XZ))) - slogdet(W)[1]
 
 		for _ in range(max_iter):
 			for i in range(0, XZ.shape[1], batch_size):
@@ -179,7 +215,13 @@ class ISA(Distribution):
 					W += step_width * P
 					A = inv(W)
 
-		# update model parameters
+		if pocket:
+			# test for improvement of lower bound
+			if mean(self.prior_energy(dot(W, XZ))) - slogdet(W)[1] > energy:
+				# don't update parameters
+				return
+
+		# update linear features
 		self.A = A[:self.A.shape[0]]
 
 
@@ -404,6 +446,15 @@ class ISA(Distribution):
 
 
 	def sample_posterior_hmc(self, X, num_steps=100, Y=None, **kwargs):
+		"""
+		Samples posterior over hidden representations using Hamiltonian Monte
+		Carlo sampling.
+
+		B{References:}
+			- Duane, A. (1987). I{Hybrid Monte Carlo.}
+			- Neal, R. (2010). I{MCMC Using Hamiltonian Dynamics}
+		"""
+
 		# hyperparameters
 		lf_num_steps = kwargs.get('lf_num_steps', 10)
 		lf_step_size = kwargs.get('lf_step_size', 0.01) + zeros([1, X.shape[1]])
@@ -460,6 +511,10 @@ class ISA(Distribution):
 
 
 	def sample_posterior_metropolis(self, X, num_steps=1000, Y=None, **kwargs):
+		"""
+		Sample posterior over hidden representations using Metropolis-Hastings
+		"""
+
 		# hyperparameters
 		standard_deviation = kwargs.get('standard_deviation', 0.01)
 
@@ -512,6 +567,12 @@ class ISA(Distribution):
 	def prior_energy(self, Y):
 		"""
 		For given hidden states, calculates the negative log-probability plus some constant.
+
+		@type  Y: array_like
+		@param Y: a number of hidden states stored in columns
+
+		@rtype: ndarray
+		@return: the negative log-porbability of each data point
 		"""
 
 		energy = zeros([1, Y.shape[1]])
@@ -527,6 +588,12 @@ class ISA(Distribution):
 	def prior_loglikelihood(self, Y):
 		"""
 		Calculates the log-probability of hidden states.
+
+		@type  Y: array_like
+		@param Y: a number of hidden states stored in columns
+
+		@rtype: ndarray
+		@return: the log-probability of each data point
 		"""
 
 		loglik = zeros([1, Y.shape[1]])
@@ -539,11 +606,28 @@ class ISA(Distribution):
 
 
 
-	def loglikelihood(self, X, num_samples=10, num_steps=10, method='biased'):
+	def loglikelihood(self, X, num_samples=10, method='biased', sampling_method=('ais', {'num_steps': 10})):
 		"""
-		@param num_steps: number of MCMC steps used to sample from posterior
+		Computes the log-likelihood for a set of data samples. If the model is overcomplete, the
+		log-likelihood is estimated using one of two importance sampling methods. The biased method
+		tends to underestimate the log-likelihood. To get rid of the bias, use more samples.
+		The unbiased method oftentimes suffers from extremely high variance and should be used with
+		caution.
 
+		@type  X: array_like
+		@param X: a number of visible states stored in columns
+
+		@type  method: string
+		@param method: whether to use the 'biased' or 'unbiased' method
+
+		@type  num_samples: integer
 		@param num_samples: number of generated importance weights
+
+		@type  sampling_method: tuple
+		@param sampling_method: method and parameters to generate importance weights
+
+		@rtype: ndarray
+		@return: the log-probability of each data point
 		"""
 
 		if self.num_hiddens == self.num_visibles:
@@ -554,7 +638,7 @@ class ISA(Distribution):
 				# sample importance weights
 				log_is_weights = asshmarray(empty([num_samples, X.shape[1]]))
 				def parfor(i):
-					log_is_weights[i] = self.sample_posterior_ais(X, num_steps=num_steps)[1]
+					log_is_weights[i] = self.sample_posterior_ais(X, **sampling_method[1])[1]
 				mapp(parfor, range(num_samples))
 
 				# average importance weights to get likelihoods
@@ -566,7 +650,7 @@ class ISA(Distribution):
 				# sample importance weights
 				log_is_weights = asshmarray(empty([num_samples, X.shape[1]]))
 				def parfor(i):
-					log_is_weights[i] = self.sample_posterior_ais(X, num_steps=num_steps)[1]
+					log_is_weights[i] = self.sample_posterior_ais(X, **sampling_method[1])[1]
 				mapp(parfor, range(num_samples))
 
 				# obtain an initial first guess using the biased method
