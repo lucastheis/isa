@@ -12,10 +12,10 @@ from numpy import *
 from models import ISA, GSM
 from tools import preprocess, Experiment
 
-# patch size, subspace size, overcompleteness
+# PS, SS, OC, ND, MI
 parameters = [
-	['8x8', 1, 1, 50, 100],
-	['8x8', 1, 2, 50, 100],
+	['8x8', 1, 1, 50, 200],
+	['8x8', 1, 2, 50, 200],
 ]
 
 def main(argv):

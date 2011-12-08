@@ -115,7 +115,7 @@ class ISA(Distribution):
 			self.train_sgd(Y, **method[1])
 
 			# optimize parameters of the prior (M)
-			if i >= max_iter / 2:
+			if i >= max_iter / 3:
 				self.train_prior(Y)
 
 			if Distribution.VERBOSITY > 0:

@@ -13,13 +13,13 @@ from numpy.random import randn
 from models import ISA, GSM
 from tools import preprocess, Experiment
 
-# patch size, subspace size, overcompleteness
+# PS, SS, OC, ND, MI, NS
 parameters = [
-	['8x8',   1, 1, 100, 100, 32.],
-	['10x10', 1, 1, 100, 100, 32.],
-	['12x12', 1, 1, 100, 100, 32.],
-	['14x14', 1, 1, 100, 100, 32.],
-	['16x16', 1, 1, 100, 100, 32.],
+	['8x8',   1, 1, 100, 200, 32.],
+	['10x10', 1, 1, 100, 200, 32.],
+	['12x12', 1, 1, 100, 200, 32.],
+	['14x14', 1, 1, 100, 200, 32.],
+	['16x16', 1, 1, 100, 200, 32.],
 ]
 
 def main(argv):
@@ -38,7 +38,7 @@ def main(argv):
 		print '  OC = overcompleteness'
 		print '  ND = number of training points'
 		print '  MI = maximum number of training epochs'
-		print '  NS = inverse noise level' 
+		print '  NS = inverse noise level'
 
 		return 0
 
