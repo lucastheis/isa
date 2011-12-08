@@ -15,11 +15,11 @@ from tools import preprocess, Experiment
 
 # PS, SS, OC, ND, MI, NS
 parameters = [
-	['8x8',   1, 1, 100, 200, 32.],
-	['10x10', 1, 1, 100, 200, 32.],
-	['12x12', 1, 1, 100, 200, 32.],
-	['14x14', 1, 1, 100, 200, 32.],
-	['16x16', 1, 1, 100, 200, 32.],
+	['8x8',   1, 1, 100, 150, 32.],
+	['10x10', 1, 1, 100, 150, 32.],
+	['12x12', 1, 1, 100, 150, 32.],
+	['14x14', 1, 1, 100, 150, 32.],
+	['16x16', 1, 1, 100, 150, 32.],
 ]
 
 def main(argv):
@@ -45,23 +45,30 @@ def main(argv):
 	seterr(invalid='raise', over='raise', divide='raise')
 
 	# some hyperparameters
-	patch_size, ssize, overcompleteness, num_data, max_iter, noise_factor = parameters[int(argv[1])]
+	patch_size, ssize, overcompleteness, num_data, max_iter, noise_level = parameters[int(argv[1])]
 	num_data *= 1000
 
 	experiment = Experiment()
 
 	# load and whiten data
 	data = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
-	data = asarray(data, dtype='float64')
+
+	# log-transform data
+	data[data == 0] = 1
+	data = log(asarray(data, dtype='float64'))
 
 	# normalize data and add noise
 	data -= mean(data)
 	data /= std(data)
-	data += randn(*data.shape) / float(noise_factor)
+	data += randn(*data.shape) / float(noise_level)
 
-	# create and train model
+	# create model
 	model = ISA(data.shape[0], data.shape[0] * overcompleteness, ssize=ssize)
+
+	# initialize, train and finetune model
+	model.train(data[:, :10000], max_iter=15)
 	model.train(data[:, :num_data], max_iter=max_iter)
+	model.train(data[:, :num_data], max_iter=5, method=('sgd', {'step_width': 1E-4}))
 
 	# save results
 	experiment['model'] = model
