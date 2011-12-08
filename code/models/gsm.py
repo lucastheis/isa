@@ -53,11 +53,8 @@ class GSM(Distribution):
 
 			# calculate posterior over scales (E)
 			sqnorms = sum(square(data), 0).reshape(1, -1)
-			post = exp(-0.5 * sqnorms / square(scales) - self.dim * log(scales))
-			post /= sum(post, 0)
-
-			# assign equal probability where all scales have near-zero probability
-			post[isnan(post)] = 1. / self.num_scales
+			post = -0.5 * sqnorms / square(scales) - self.dim * log(scales)
+			post = exp(post - logsumexp(post, 0))
 
 			# adjust parameters (M)
 			self.scales = sqrt(sum(post * sqnorms, 1) / sum(post, 1) / self.dim)
