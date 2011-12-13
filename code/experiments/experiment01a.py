@@ -76,7 +76,7 @@ def main(argv):
 	experiment['model'] = model
 	experiment['parameters'] = parameters[int(argv[1])]
 	experiment['whitening_matrix'] = whitening_matrix
-	experiment.save('results/experiment01b/experiment01b.{0}.{1}.xpck')
+	experiment.save('results/experiment01a/experiment01a.{0}.{1}.xpck')
 
 	return 0
 

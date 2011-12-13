@@ -162,12 +162,6 @@ class ISA(Distribution):
 		@param Y: hidden states
 		"""
 
-#		# TODO: parallelize
-#		for model in self.subspaces:
-#			model.train(Y[:model.dim])
-#			model.normalize()
-#			Y = Y[model.dim:]
-
 		offset = [0]
 		for model in self.subspaces:
 			offset.append(offset[-1] + model.dim)
@@ -177,6 +171,7 @@ class ISA(Distribution):
 			model.train(Y[offset[i]:offset[i] + model.dim])
 			model.normalize()
 			return model
+
 		self.subspaces = mapp(parfor, range(len(self.subspaces)))
 
 
@@ -244,8 +239,8 @@ class ISA(Distribution):
 				batch = X[:, i:i + batch_size]
 
 				if not batch.shape[1] < batch_size:
-					W, _, _ = fmin_l_bfgs_b(f, W.flatten(), df, (batch,), 
-						disp=Distribution.VERBOSITY - 1, maxfun=max_fun)
+					W, _, _ = fmin_l_bfgs_b(f, W.flatten(), df, (batch,), maxfun=max_fun,
+						disp=Distribution.VERBOSITY - 1, iprint=0)
 
 		if pocket:
 			# test for improvement of lower bound
