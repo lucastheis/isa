@@ -14,7 +14,7 @@ from scipy.stats import gamma
 from utils import logmeanexp, logsumexp
 
 class GSM(Distribution):
-	def __init__(self, dim=1, num_scales=20):
+	def __init__(self, dim=1, num_scales=6):
 		self.dim = dim
 		self.num_scales = num_scales
 
@@ -56,8 +56,17 @@ class GSM(Distribution):
 			post = -0.5 * sqnorms / square(scales) - self.dim * log(scales)
 			post = exp(post - logsumexp(post, 0))
 
-			# adjust parameters (M)
-			self.scales = sqrt(sum(post * sqnorms, 1) / sum(post, 1) / self.dim)
+			try:
+				# adjust parameters (M)
+				self.scales = sqrt(sum(post * sqnorms, 1) / sum(post, 1) / self.dim)
+
+			except FloatingPointError:
+				indices = where(sum(post, 1) == 0.)[1]
+
+				if Distribution.VERBOSITY > 0:
+					print 'Degenerated scales {0}.'.format(self.scales[indices])
+
+				self.scales[indices] = 0.75 + rand(len(indices)) / 2.  
 
 			if Distribution.VERBOSITY > 1:
 				print i + 1, self.evaluate(data) / log(2.)

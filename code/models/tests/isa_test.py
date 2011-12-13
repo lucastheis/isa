@@ -30,7 +30,17 @@ class Tests(unittest.TestCase):
 		self.assertTrue(all(abs(G - N) < 1E-5))
 
 
+	def test_training(self):
+		isa = ISA(2, 2)
+		data = isa.sample(1000)
+
+		# make sure SGD training doesn't throw an error
+		isa.train_sgd(data, max_iter=1)
+
+		# make sure L-BFGS training doesn't throw an error
+		isa.train_lbfgs(data, max_fun=1)
+
+
 
 if __name__ == '__main__':
 	unittest.main()
-

@@ -8,11 +8,12 @@ __docformat__ = 'epytext'
 
 from distribution import Distribution
 from numpy import *
-from numpy import max, round
+from numpy import min, max, round
 from numpy.random import randint, randn, rand, logseries, permutation
 from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
-from tools import gaborf, mapp
+from scipy.optimize import fmin_l_bfgs_b, check_grad
+from tools import gaborf, mapp, whiten
 from tools.shmarray import asshmarray
 from gsm import GSM
 from copy import deepcopy
@@ -44,8 +45,9 @@ class ISA(Distribution):
 		if not num_hiddens:
 			self.num_hiddens = num_visibles
 
-		# linear features
-		self.A = randn(self.num_visibles, self.num_hiddens) / sqrt(self.num_hiddens)
+		# random linear features on the sphere
+		self.A = randn(self.num_visibles, self.num_hiddens)
+		self.A = self.A / sqrt(sum(square(self.A), 1)).reshape(-1, 1)
 
 		# subspace densities
 		self.subspaces = [
@@ -115,6 +117,12 @@ class ISA(Distribution):
 			else:
 				print 0, self.evaluate(X)
 
+		if isinstance(method, str):
+			method = (method, {})
+
+		if isinstance(sampling_method, str):
+			sampling_method = (sampling_method, {})
+
 		for i in range(max_iter):
 			# complete data (E)
 			Y = self.sample_posterior(X, method=sampling_method)
@@ -122,12 +130,19 @@ class ISA(Distribution):
 			# used to initialize sampling procedure in next iteration
 			sampling_method[1]['Y'] = Y
 
-			# optimize linear features (M)
-			self.train_sgd(Y, **method[1])
-
 			# optimize parameters of the prior (M)
 			if i >= max_iter / 3:
 				self.train_prior(Y)
+
+			# optimize linear features (M)
+			if method[0].lower() == 'sgd':
+				self.train_sgd(Y, **method[1])
+
+			elif method[0].lower() == 'lbfgs':
+				self.train_lbfgs(Y, **method[1])
+
+			else:
+				raise ValueError('Unknown training method \'{0}\'.'.format(method[0]))
 
 			if Distribution.VERBOSITY > 0:
 				if self.num_hiddens > self.num_visibles:
@@ -147,10 +162,101 @@ class ISA(Distribution):
 		@param Y: hidden states
 		"""
 
+#		# TODO: parallelize
+#		for model in self.subspaces:
+#			model.train(Y[:model.dim])
+#			model.normalize()
+#			Y = Y[model.dim:]
+
+		offset = [0]
 		for model in self.subspaces:
-			model.train(Y[:model.dim])
+			offset.append(offset[-1] + model.dim)
+
+		def parfor(i):
+			model = self.subspaces[i]
+			model.train(Y[offset[i]:offset[i] + model.dim])
 			model.normalize()
-			Y = Y[model.dim:]
+			return model
+		self.subspaces = mapp(parfor, range(len(self.subspaces)))
+
+
+
+	def train_lbfgs(self, Y, **kwargs):
+		"""
+		A stochastic variant of L-BFGS.
+
+		@type  max_iter: integer
+		@param max_iter: maximum number of iterations through data set
+
+		@type  batch_size: integer
+		@param batch_size: number of data points used for each L-BFGS update
+
+		@type  step_width: float
+		@param step_width: factor by which gradient is multiplied
+
+		@type  pocket: boolean
+		@param pocket: if true, parameters are kept in case of performance degradation
+
+		@rtype: boolean
+		@return: false if no improvement could be achieved
+
+		B{References}:
+			- Byrd, R. H., Lu, P. and Nocedal, J. (1995). I{A Limited Memory Algorithm for Bound
+			Constrained Optimization.}
+		"""
+
+		# hyperparameters
+		max_iter = kwargs.get('max_iter', 1)
+		max_fun = kwargs.get('max_fun', 50)
+		batch_size = kwargs.get('batch_size', Y.shape[1])
+		shuffle = kwargs.get('shuffle', True)
+		pocket = kwargs.get('pocket', shuffle)
+
+		# objective function
+		def f(W, X):
+			W = W.reshape(self.num_hiddens, self.num_hiddens)
+			return mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
+
+		# objective function gradient
+		def df(W, X):
+			W = W.reshape(self.num_hiddens, self.num_hiddens)
+			A = inv(W)
+			g = dot(self.prior_energy_gradient(dot(W, X)), X.T) / X.shape[1]
+			return (g - A.T).flatten()
+
+		# completed filter matrix
+		A = vstack([self.A, svd(self.A)[2][self.num_visibles:, :]])
+		W = inv(A)
+
+		# completed data
+		X = dot(A, Y)
+
+		if pocket:
+			energy = f(W, X)
+
+		for _ in range(max_iter):
+			if shuffle:
+				# randomize order of data
+				X = X[:, permutation(X.shape[1])]
+
+			# split data in batches and perform L-BFGS on batches
+			for i in range(0, X.shape[1], batch_size):
+				batch = X[:, i:i + batch_size]
+
+				if not batch.shape[1] < batch_size:
+					W, _, _ = fmin_l_bfgs_b(f, W.flatten(), df, (batch,), 
+						disp=Distribution.VERBOSITY - 1, maxfun=max_fun)
+
+		if pocket:
+			# test for improvement of lower bound
+			if f(W, X) > energy:
+				# don't update parameters
+				return False
+
+		# update linear features
+		self.A = inv(W.reshape(*A.shape))[:self.A.shape[0]]
+
+		return True
 
 
 
@@ -173,18 +279,18 @@ class ISA(Distribution):
 
 		@type  pocket: boolean
 		@param pocket: if true, parameters are kept in case of performance degradation
+
+		@rtype: boolean
+		@return: false if no improvement could be achieved
 		"""
 
+		# hyperparameters
 		max_iter = kwargs.get('max_iter', 1)
-		batch_size = kwargs.get('batch_size', 100)
+		batch_size = kwargs.get('batch_size', min([100, Y.shape[1]]))
 		step_width = kwargs.get('step_width', 0.001)
-		momentum = kwargs.get('momentum', 0.8)
+		momentum = kwargs.get('momentum', 0.9)
 		shuffle = kwargs.get('shuffle', True)
 		pocket = kwargs.get('pocket', shuffle)
-
-		if shuffle:
-			# randomize order of data
-			Y = Y[:, permutation(Y.shape[1])]
 
 		# nullspace basis
 		B = svd(self.A)[2][self.num_visibles:, :]
@@ -194,17 +300,21 @@ class ISA(Distribution):
 		W = inv(A)
 
 		# completed data
-		XZ = dot(A, Y)
+		X = dot(A, Y)
 
 		# initial direction of momentum
 		P = 0.
 
 		if pocket:
-			energy = mean(self.prior_energy(dot(W, XZ))) - slogdet(W)[1]
+			energy = mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
 
 		for _ in range(max_iter):
-			for i in range(0, XZ.shape[1], batch_size):
-				batch = XZ[:, i:i + batch_size]
+			if shuffle:
+				# randomize order of data
+				X = X[:, permutation(X.shape[1])]
+
+			for i in range(0, X.shape[1], batch_size):
+				batch = X[:, i:i + batch_size]
 
 				if not batch.shape[1] < batch_size:
 					# calculate gradient
@@ -217,12 +327,14 @@ class ISA(Distribution):
 
 		if pocket:
 			# test for improvement of lower bound
-			if mean(self.prior_energy(dot(W, XZ))) - slogdet(W)[1] > energy:
+			if mean(self.prior_energy(dot(W, X))) - slogdet(W)[1] > energy:
 				# don't update parameters
-				return
+				return False
 
 		# update linear features
 		self.A = A[:self.A.shape[0]]
+
+		return True
 
 
 

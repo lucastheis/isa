@@ -1,4 +1,4 @@
-from preprocess import preprocess
+from preprocess import preprocess, whiten
 from experiment import Experiment
 from contours import contours
 from sqrtm import sqrtm, sqrtmi
