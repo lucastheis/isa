@@ -72,12 +72,8 @@ def main(argv):
 	# load natural image patches
 	data = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
 
-	# add Gaussian white noise
-	if noise_level is not None:
-		data += randn(*data.shape) / float(noise_level)
-
 	# log-transform and whiten data
-	data, whitening_matrix = preprocess(data, True)
+	data, whitening_matrix = preprocess(data, return_whitening_matrix=True, noise_level=noise_level)
 
 	# create model
 	model = ISA(data.shape[0], data.shape[0] * overcompleteness, ssize=ssize)

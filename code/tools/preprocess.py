@@ -7,11 +7,11 @@ __author__ = 'Lucas Theis <lucas@tuebingen.mpg.de>'
 __docformat__ = 'epytext'
 __version__ = '1.2.0'
 
-from numpy import log, transpose, mean, dot, diag, sqrt, cov, asarray, real
-from numpy.random import permutation
+from numpy import log, transpose, mean, dot, diag, sqrt, cov, asarray, real, std
+from numpy.random import permutation, randn
 from numpy.linalg import eig
 
-def preprocess(data, return_whitening_matrix=False, etol=1E-10):
+def preprocess(data, return_whitening_matrix=False, etol=1E-10, noise_level=None):
 	"""
 	Log-transforms, centers and symmetrically whitens data.
 
@@ -21,6 +21,9 @@ def preprocess(data, return_whitening_matrix=False, etol=1E-10):
 	@type  etol: float
 	@param etol: eigenvalues below this threshold are not considered
 
+	@type  noise_level: integer
+	@param noise_level: add a little bit of noise after log-transform
+
 	@rtype: ndarray/tuple
 	@return: preprocessed data, optionally with whitening matrix
 	"""
@@ -28,11 +31,15 @@ def preprocess(data, return_whitening_matrix=False, etol=1E-10):
 	data = asarray(data, dtype='float64')
 
 	# log-transform
-	data[data == 0.] = 1.
+	data[data < 1.] = 1.
 	data = log(data)
 
 	# center
 	data = data - mean(data, 1).reshape(-1, 1)
+
+	if noise_level is not None:
+		# add Gaussian white noise
+		data += randn(*data.shape) * (std(data) / float(noise_level))
 
 	# shuffle
 	data = data[:, permutation(data.shape[1])]
