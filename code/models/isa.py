@@ -323,6 +323,9 @@ class ISA(Distribution):
 		if pocket:
 			# test for improvement of lower bound
 			if mean(self.prior_energy(dot(W, X))) - slogdet(W)[1] > energy:
+				if Distribution.VERBOSITY > 0:
+					print 'No improvement.'
+
 				# don't update parameters
 				return False
 
@@ -797,3 +800,12 @@ class ISA(Distribution):
 
 			else:
 				raise NotImplementedError('Unknown method \'{0}\'.'.format(method))
+
+
+
+	def gaussianize(self, Y):
+		"""
+		Performs subspace Gaussianization on hidden representations.
+		"""
+
+		pass

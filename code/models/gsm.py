@@ -61,7 +61,7 @@ class GSM(Distribution):
 				self.scales = sqrt(sum(post * sqnorms, 1) / sum(post, 1) / self.dim)
 
 			except FloatingPointError:
-				indices = where(sum(post, 1) == 0.)[1]
+				indices, = where(sum(post, 1) == 0.)
 
 				if Distribution.VERBOSITY > 0:
 					print 'Degenerated scales {0}.'.format(self.scales[indices])
@@ -166,3 +166,11 @@ class GSM(Distribution):
 
 		# compute energy gradient
 		return multiply(dot(1. / square(scales).T, post), data)
+
+
+	def gaussianize(self, data):
+		"""
+		
+		"""
+
+		pass
