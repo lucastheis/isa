@@ -36,14 +36,14 @@ class ISA(Distribution):
 		@param ssize: subspace dimensionality
 		"""
 
+		if num_hiddens is None:
+			num_hiddens = num_visibles
+
 		if mod(num_hiddens, ssize):
 			raise ValueError('num_hiddens must be a multiple of ssize.')
 
 		self.num_visibles = num_visibles
 		self.num_hiddens = num_hiddens
-
-		if not num_hiddens:
-			self.num_hiddens = num_visibles
 
 		# random linear features on the sphere
 		self.A = randn(self.num_visibles, self.num_hiddens)
@@ -97,7 +97,7 @@ class ISA(Distribution):
 
 
 
-	def train(self, X, max_iter=100, method=('sgd', {}), sampling_method=('gibbs', {})):
+	def train(self, X, method=('sgd', {}), sampling_method=('gibbs', {}), **kwargs):
 		"""
 		Optimizes model parameters with respect to the log-likelihoood.
 
@@ -111,6 +111,10 @@ class ISA(Distribution):
 		@param sampling_method: method and parameters to generate hidden representations
 		"""
 
+		max_iter = kwargs.get('max_iter', 100)
+		adaptive = kwargs.get('adaptive', True) 
+		train_prior = kwargs.get('train_prior', True)
+
 		if Distribution.VERBOSITY > 0:
 			if self.num_hiddens > self.num_visibles:
 				print 0
@@ -123,6 +127,9 @@ class ISA(Distribution):
 		if isinstance(sampling_method, str):
 			sampling_method = (sampling_method, {})
 
+		if adaptive and 'step_width' not in method[1]:
+			method[1]['step_width'] = 0.001
+
 		for i in range(max_iter):
 			# complete data (E)
 			Y = self.sample_posterior(X, method=sampling_method)
@@ -131,12 +138,16 @@ class ISA(Distribution):
 			sampling_method[1]['Y'] = Y
 
 			# optimize parameters of the prior (M)
-			if i >= max_iter / 3:
+			if train_prior:
 				self.train_prior(Y)
 
 			# optimize linear features (M)
 			if method[0].lower() == 'sgd':
-				self.train_sgd(Y, **method[1])
+				improvement = self.train_sgd(Y, **method[1])
+
+				# adapt learning rate
+				if adaptive:
+					method[1]['step_width'] *= 1.1 if improvement else 0.5
 
 			elif method[0].lower() == 'lbfgs':
 				self.train_lbfgs(Y, **method[1])
@@ -240,7 +251,7 @@ class ISA(Distribution):
 
 				if not batch.shape[1] < batch_size:
 					W, _, _ = fmin_l_bfgs_b(f, W.flatten(), df, (batch,), maxfun=max_fun,
-						disp=Distribution.VERBOSITY - 1, iprint=0)
+						disp=1 if Distribution.VERBOSITY > 1 else 0, iprint=0)
 
 		if pocket:
 			# test for improvement of lower bound
@@ -303,7 +314,7 @@ class ISA(Distribution):
 		if pocket:
 			energy = mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
 
-		for _ in range(max_iter):
+		for j in range(max_iter):
 			if shuffle:
 				# randomize order of data
 				X = X[:, permutation(X.shape[1])]
@@ -665,6 +676,7 @@ class ISA(Distribution):
 
 		gradient = []
 
+		# TODO: parallelize
 		for model in self.subspaces:
 			gradient.append(
 				model.energy_gradient(Y[:model.dim]))

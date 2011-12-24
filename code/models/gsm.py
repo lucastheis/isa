@@ -10,11 +10,12 @@ from distribution import Distribution
 from numpy.random import rand, randint, randn
 from numpy import *
 from numpy import min, max
-from scipy.stats import gamma
-from utils import logmeanexp, logsumexp
+from scipy.stats import gamma, chi
+from scipy.optimize import bisect
+from utils import logmeanexp, logsumexp, gammaincinv
 
 class GSM(Distribution):
-	def __init__(self, dim=1, num_scales=6):
+	def __init__(self, dim=1, num_scales=10):
 		self.dim = dim
 		self.num_scales = num_scales
 
@@ -24,7 +25,7 @@ class GSM(Distribution):
 
 
 
-	def initialize(self, method='student'):
+	def initialize(self, method='cauchy'):
 		if method.lower() == 'student':
 			# sample scales using the Gamma distribution
 			self.scales = 1. / sqrt(gamma.rvs(1, 0, 1, size=self.num_scales))
@@ -45,7 +46,7 @@ class GSM(Distribution):
 		Estimates parameters using EM.
 		"""
 		
-		if Distribution.VERBOSITY > 1:
+		if Distribution.VERBOSITY > 2:
 			print 0, self.evaluate(data) / log(2.)
 
 		for i in range(max_iter):
@@ -68,7 +69,7 @@ class GSM(Distribution):
 
 				self.scales[indices] = 0.75 + rand(len(indices)) / 2.  
 
-			if Distribution.VERBOSITY > 1:
+			if Distribution.VERBOSITY > 2:
 				print i + 1, self.evaluate(data) / log(2.)
 
 
@@ -156,11 +157,7 @@ class GSM(Distribution):
 		# compute posterior over scales
 		sqnorms = sum(square(data), 0).reshape(1, -1)
 
-		# faster but less stable
-#		post = exp(-0.5 * sqnorms / square(scales) - self.dim * log(scales))
-#		post /= sum(post, 0)
-
-		# slower but more stable
+		# slow, but stable
 		post = -0.5 * sqnorms / square(scales) - self.dim * log(scales)
 		post = exp(post - logsumexp(post, 0))
 
@@ -170,7 +167,86 @@ class GSM(Distribution):
 
 	def gaussianize(self, data):
 		"""
-		
+		An implementation of radial Gaussianization.
+
+		B{References:}
+			- Lyu, S. and Simoncelli, E. (2009). I{Nonlinear extraction of independent components
+			of natural images using radial gaussianization.}
 		"""
 
-		pass
+		def rcdf(norm):
+			"""
+			Radial CDF.
+			"""
+
+			# allocate memory
+			result = zeros_like(norm)
+
+			for j in range(self.num_scales):
+				result += grcdf(norm / self.scales[j], self.dim)
+			result /= self.num_scales
+			result[result > 1.] = 1.
+
+			return result
+
+		# radially Gaussianize data
+		norm = sqrt(sum(square(data), 0))
+		return multiply(igrcdf(rcdf(norm), self.dim) / norm, data)
+
+
+
+	def gaussianizeinv(self, data, maxiter=100):
+		def rcdf(norm):
+			"""
+			Radial CDF.
+
+			@type  norm: float
+			@param norm: one-dimensional, positive input
+			"""
+			return sum(grcdf(norm / self.scales, self.dim)) / self.num_scales
+
+		# compute norm
+		norm = sqrt(sum(square(data), 0))
+
+		# normalize data
+		data = data / norm
+
+		# apply Gaussian radial CDF
+		norm = grcdf(norm, self.dim)
+
+		# apply inverse radial CDF
+		norm_max = 1.
+		for t in range(len(norm)):
+			# make sure root lies between zero and norm_max
+			while rcdf(norm_max) < norm[t]:
+				norm_max += 1.
+			# find root numerically
+			norm[t] = bisect(
+			    f=lambda x: rcdf(x) - norm[t],
+			    a=0.,
+			    b=norm_max,
+			    maxiter=maxiter,
+			    disp=False)
+
+		# inverse radial Gaussianization
+		data = multiply(norm, data)
+
+		return data
+
+
+
+def grcdf(norm, dim):
+	"""
+	Gaussian radial CDF.
+	"""
+
+	return chi.cdf(norm, dim)
+
+
+
+def igrcdf(norm, dim):
+	"""
+	Inverse Gaussian radial CDF.
+	"""
+
+	return sqrt(2.) * sqrt(gammaincinv(dim / 2., norm))
