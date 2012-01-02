@@ -320,7 +320,7 @@ def main(argv):
 	experiment = Experiment(sys.argv[1])
 
 	if len(argv) > 2:
-		# print arguments
+		# print results requested through arguments
 		for arg in argv[2:]:
 			try:
 				print experiment[arg]
