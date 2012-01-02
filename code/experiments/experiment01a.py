@@ -10,10 +10,11 @@ sys.path.append('./code')
 
 from numpy import *
 from numpy.random import randn
-from models import ISA, GSM
+from models import ISA, GSM, Distribution
 from tools import preprocess, Experiment, mapp
 
-mapp.max_processes = 8
+mapp.max_processes = 12
+Distribution.VERBOSITY = 2
 
 from numpy import round
 from numpy.linalg import svd
@@ -79,8 +80,12 @@ def main(argv):
 	model = ISA(data.shape[0], data.shape[0] * overcompleteness, ssize=ssize)
 
 	# initialize, train and finetune model
-	model.train(data[:, :20000], max_iter=max_iter, sampling_method=('gibbs', {'num_steps': num_steps}))
-	model.train(data[:, :num_data], max_iter=10, method='lbfgs', sampling_method=('gibbs', {'num_steps': num_steps}))
+	model.train(data[:, :20000], max_iter=max_iter, 
+		method=('sgd', {'max_iter': 2}),
+		sampling_method=('gibbs', {'num_steps': num_steps}))
+	model.train(data[:, :num_data], max_iter=10, 
+		method='lbfgs', 
+		sampling_method=('gibbs', {'num_steps': num_steps}))
 
 	# save results
 	experiment['model'] = model
