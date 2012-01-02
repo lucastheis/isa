@@ -4,7 +4,7 @@ import unittest
 sys.path.append('./code')
 
 from models import GSM
-from models.utils import logmeanexp
+from tools import logmeanexp
 from numpy import zeros, all, abs, array, square, log, pi, sum, mean, inf, exp
 from numpy import histogram, max
 from numpy.random import randn, rand

@@ -13,11 +13,9 @@ from numpy.random import randint, randn, rand, logseries, permutation
 from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b, check_grad
-from tools import gaborf, mapp, whiten
-from tools.shmarray import asshmarray
+from tools import gaborf, mapp, whiten, logmeanexp, asshmarray
 from gsm import GSM
 from copy import deepcopy
-from utils import logmeanexp
 
 class ISA(Distribution):
 	"""

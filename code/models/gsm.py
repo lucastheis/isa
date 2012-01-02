@@ -10,9 +10,8 @@ from distribution import Distribution
 from numpy.random import rand, randint, randn
 from numpy import *
 from numpy import min, max
-from scipy.stats import gamma, chi
-from scipy.optimize import bisect
-from utils import logmeanexp, logsumexp, gammaincinv
+from scipy.stats import gamma
+from tools import logmeanexp, logsumexp
 
 class GSM(Distribution):
 	def __init__(self, dim=1, num_scales=10):
@@ -163,90 +162,3 @@ class GSM(Distribution):
 
 		# compute energy gradient
 		return multiply(dot(1. / square(scales).T, post), data)
-
-
-	def gaussianize(self, data):
-		"""
-		An implementation of radial Gaussianization.
-
-		B{References:}
-			- Lyu, S. and Simoncelli, E. (2009). I{Nonlinear extraction of independent components
-			of natural images using radial gaussianization.}
-		"""
-
-		def rcdf(norm):
-			"""
-			Radial CDF.
-			"""
-
-			# allocate memory
-			result = zeros_like(norm)
-
-			for j in range(self.num_scales):
-				result += grcdf(norm / self.scales[j], self.dim)
-			result /= self.num_scales
-			result[result > 1.] = 1.
-
-			return result
-
-		# radially Gaussianize data
-		norm = sqrt(sum(square(data), 0))
-		return multiply(igrcdf(rcdf(norm), self.dim) / norm, data)
-
-
-
-	def gaussianizeinv(self, data, maxiter=100):
-		def rcdf(norm):
-			"""
-			Radial CDF.
-
-			@type  norm: float
-			@param norm: one-dimensional, positive input
-			"""
-			return sum(grcdf(norm / self.scales, self.dim)) / self.num_scales
-
-		# compute norm
-		norm = sqrt(sum(square(data), 0))
-
-		# normalize data
-		data = data / norm
-
-		# apply Gaussian radial CDF
-		norm = grcdf(norm, self.dim)
-
-		# apply inverse radial CDF
-		norm_max = 1.
-		for t in range(len(norm)):
-			# make sure root lies between zero and norm_max
-			while rcdf(norm_max) < norm[t]:
-				norm_max += 1.
-			# find root numerically
-			norm[t] = bisect(
-			    f=lambda x: rcdf(x) - norm[t],
-			    a=0.,
-			    b=norm_max,
-			    maxiter=maxiter,
-			    disp=False)
-
-		# inverse radial Gaussianization
-		data = multiply(norm, data)
-
-		return data
-
-
-
-def grcdf(norm, dim):
-	"""
-	Gaussian radial CDF.
-	"""
-
-	return chi.cdf(norm, dim)
-
-
-
-def igrcdf(norm, dim):
-	"""
-	Inverse Gaussian radial CDF.
-	"""
-
-	return sqrt(2.) * sqrt(gammaincinv(dim / 2., norm))
