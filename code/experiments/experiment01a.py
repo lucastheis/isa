@@ -64,16 +64,17 @@ def main(argv):
 
 	seterr(invalid='raise', over='raise', divide='raise')
 
-	# some hyperparameters
+	# hyperparameters
 	patch_size, ssize, overcompleteness, num_data, max_iter, noise_level, num_steps = parameters[int(argv[1])]
 	num_data *= 1000
 
+	# start experiment
 	experiment = Experiment()
 
 	# load natural image patches
 	data = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
 
-	# log-transform and whiten data
+	# log-transform data, whiten data, and add some noise
 	data, whitening_matrix = preprocess(data, return_whitening_matrix=True, noise_level=noise_level)
 
 	# create model
@@ -81,7 +82,7 @@ def main(argv):
 
 	# initialize, train and finetune model
 	model.train(data[:, :20000], max_iter=max_iter, 
-		method=('sgd', {'max_iter': 2}),
+		method=('sgd', {'max_iter': 1}),
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 	model.train(data[:, :num_data], max_iter=10, 
 		method='lbfgs', 

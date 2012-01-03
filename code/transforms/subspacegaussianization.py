@@ -37,12 +37,21 @@ class SubspaceGaussianization(Transform):
 
 		data_rg = []
 
+		length = len(str(len(self.isa.subspaces)))
+
+		if Transform.VERBOSITY > 0:
+			print ('{0:>' + str(length) + '}/{1}').format(0, len(self.isa.subspaces)),
+
 		# TODO: parallelize
-		for gsm in self.isa.subspaces:
+		for i, gsm in enumerate(self.isa.subspaces):
 			# radially Gaussianize subspace
 			data_rg.append(
 				RadialGaussianization(gsm).apply(data[:gsm.dim]))
 			data = data[gsm.dim:]
+
+			if Transform.VERBOSITY > 0:
+				print (('\b' * (length * 2 + 2)) + '{0:>' + str(length) + '}/{1}').format(i + 1, len(self.isa.subspaces)),
+		print
 
 		return vstack(data_rg)
 
@@ -55,12 +64,21 @@ class SubspaceGaussianization(Transform):
 
 		data_irg = []
 
+		length = len(str(len(self.isa.subspaces)))
+
+		if Transform.VERBOSITY > 0:
+			print ('{0:>' + str(length) + '}/{1}').format(0, len(self.isa.subspaces)),
+
 		# TODO: parallelize
-		for gsm in self.isa.subspaces:
+		for i, gsm in enumerate(self.isa.subspaces):
 			# inverse radially Gaussianize subspace
 			data_irg.append(
 				RadialGaussianization(gsm).inverse(data[:gsm.dim]))
 			data = data[gsm.dim:]
+
+			if Transform.VERBOSITY > 0:
+				print (('\b' * (length * 2 + 2)) + '{0:>' + str(length) + '}/{1}').format(i + 1, len(self.isa.subspaces)),
+		print
 
 		data = vstack(data_irg)
 
@@ -94,9 +112,18 @@ class SubspaceGaussianization(Transform):
 		# linearly transform data
 		data = dot(W, data)
 
+		length = len(str(len(self.isa.subspaces)))
+
+		if Transform.VERBOSITY > 0:
+			print ('{0:>' + str(length) + '}/{1}').format(0, len(self.isa.subspaces)),
+
 		# TODO: parallelize
-		for gsm in self.isa.subspaces:
+		for i, gsm in enumerate(self.isa.subspaces):
 			logjacobian += RadialGaussianization(gsm).logjacobian(data[:gsm.dim])
 			data = data[gsm.dim:]
+
+			if Transform.VERBOSITY > 0:
+				print (('\b' * (length * 2 + 2)) + '{0:>' + str(length) + '}/{1}').format(i + 1, len(self.isa.subspaces)),
+		print
 
 		return logjacobian

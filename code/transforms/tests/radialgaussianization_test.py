@@ -3,9 +3,11 @@ import unittest
 
 sys.path.append('./code')
 
-from transforms import RadialGaussianization
+from transforms import Transform, RadialGaussianization
 from models import GSM
 from numpy import all, sqrt, sum, square
+
+Transform.VERBOSITY = 0
 
 class Tests(unittest.TestCase):
 	def test_inverse(self):

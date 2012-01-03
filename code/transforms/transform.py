@@ -7,6 +7,8 @@ __author__ = 'Lucas Theis <lucas@bethgelab.org>'
 __docformat__ = 'epytext'
 
 class Transform(object):
+	VERBOSITY = 1
+
 	def __init__(self):
 		raise NotImplementedError(str(self.__class__) + ' is an abstract class.')
 

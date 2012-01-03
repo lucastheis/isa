@@ -105,6 +105,9 @@ class ISA(Distribution):
 		@type  method: tuple
 		@param method: optimization method used to optimize filters
 
+		@type  train_prior: boolean
+		@param train_prior: whether or not to optimize the marginal distributions
+
 		@type  sampling_method: tuple
 		@param sampling_method: method and parameters to generate hidden representations
 		"""

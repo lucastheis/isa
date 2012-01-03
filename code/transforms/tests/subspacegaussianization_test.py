@@ -4,8 +4,10 @@ import unittest
 sys.path.append('./code')
 
 from models import ISA, GSM
-from transforms import SubspaceGaussianization
+from transforms import Transform, SubspaceGaussianization
 from numpy import sqrt, sum, square, all, max, vstack
+
+Transform.VERBOSITY = 0
 
 class Tests(unittest.TestCase):
 	def test_inverse(self):
@@ -14,7 +16,7 @@ class Tests(unittest.TestCase):
 		"""
 
 		# complete model
-		isa = ISA(4, 4, 2)
+		isa = ISA(20, 20, 2)
 
 		# generate sample data
 		samples = isa.sample(100)
