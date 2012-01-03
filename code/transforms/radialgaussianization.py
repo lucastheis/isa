@@ -106,7 +106,7 @@ class RadialGaussianization(Transform):
 		@param data: data points stored in columns
 
 		@rtype: ndarray
-		@return: the log-Jacobian determinants
+		@return: the logarithm of the Jacobian determinants
 		"""
 
 		def rcdf(norm):

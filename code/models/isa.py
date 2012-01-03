@@ -229,7 +229,7 @@ class ISA(Distribution):
 			return (g - A.T).flatten()
 
 		# completed filter matrix
-		A = vstack([self.A, svd(self.A)[2][self.num_visibles:, :]])
+		A = vstack([self.A, self.nullspace_basis()])
 		W = inv(A)
 
 		# completed data
@@ -297,7 +297,7 @@ class ISA(Distribution):
 		pocket = kwargs.get('pocket', shuffle)
 
 		# nullspace basis
-		B = svd(self.A)[2][self.num_visibles:, :]
+		B = self.nullspace_basis()
 		
 		# completed basis and filters
 		A = vstack([self.A, B])
@@ -444,8 +444,7 @@ class ISA(Distribution):
 		"""
 
 		# nullspace basis
-		B = svd(self.A)[2][self.num_visibles:, :]
-		return dot(B, self.sample_posterior(X, method=method))
+		return dot(self.nullspace_basis(), self.sample_posterior(X, method=method))
 
 
 
@@ -501,7 +500,7 @@ class ISA(Distribution):
 		WX = dot(W, X)
 
 		# nullspace basis and projection matrix
-		B = svd(self.A)[2][self.num_visibles:, :]
+		B = self.nullspace_basis()
 		Q = dot(B.T, B)
 
 		# initialize proposal samples (X and Z are initially independent and Gaussian)
@@ -579,7 +578,7 @@ class ISA(Distribution):
 		lf_step_size = kwargs.get('lf_step_size', 0.01) + zeros([1, X.shape[1]])
 
 		# nullspace basis
-		B = svd(self.A)[2][self.num_visibles:, :]
+		B = self.nullspace_basis()
 
 		if Y is None:
 			# initialize hidden variables
@@ -638,7 +637,7 @@ class ISA(Distribution):
 		standard_deviation = kwargs.get('standard_deviation', 0.01)
 
 		# nullspace basis
-		B = svd(self.A)[2][self.num_visibles:, :]
+		B = self.nullspace_basis()
 
 		# initialization of nullspace hidden variables
 		Z = dot(B, Y) if Y is not None else \
@@ -813,9 +812,21 @@ class ISA(Distribution):
 
 
 
-	def gaussianize(self, Y):
+	def nullspace_basis(self):
 		"""
-		Performs subspace Gaussianization on hidden representations.
+		Compute the orthogonal complement of the feature matrix.
 		"""
 
-		pass
+		return svd(self.A)[2][self.num_visibles:, :]
+
+
+
+	def is_overcomplete(self):
+		"""
+		Return C{true} if model is overcomplete, otherwise C{false}.
+
+		@rtype: boolean
+		@return: whether or not the model is overcomplete
+		"""
+
+		return self.num_hiddens > self.num_visibles

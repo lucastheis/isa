@@ -51,7 +51,7 @@ class Transform(object):
 		@param data: data points stored in columns
 
 		@rtype: ndarray
-		@return: the log-Jacobian determinants
+		@return: the logarithm of the Jacobian determinants
 		"""
 
 		raise NotImplementedError('Abstract method \'logjacobian\' not implemented in '

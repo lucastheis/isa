@@ -10,7 +10,7 @@ from numpy import all, sqrt, sum, square
 class Tests(unittest.TestCase):
 	def test_inverse(self):
 		"""
-		Make sure inverse Gaussianization is inverse of Gaussianization.
+		Make sure inverse Gaussianization is inverse to Gaussianization.
 		"""
 
 		gsm = GSM(3, 10)
@@ -48,7 +48,7 @@ class Tests(unittest.TestCase):
 
 		rg = RadialGaussianization(gsm)
 
-		# after Gaussianization, samples should be Gauss distributed
+		# after Gaussianization, samples should be Gaussian distributed
 		loglik_gsm = gsm.loglikelihood(samples)
 		loglik_gauss = gauss.loglikelihood(rg(samples)) + rg.logjacobian(samples)
 
