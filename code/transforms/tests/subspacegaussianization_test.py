@@ -29,7 +29,9 @@ class Tests(unittest.TestCase):
 		# distance between samples and reconstructed samples
 		dist = sqrt(sum(square(samples - samples_rec), 0))
 
-		self.assertTrue(all(dist < 1E-8))
+		self.assertTrue(all(dist < 1E-6))
+
+		###
 
 		# overcomplete model
 		isa = ISA(3, 6, 3)
@@ -46,7 +48,7 @@ class Tests(unittest.TestCase):
 		# distance between samples and reconstructed samples
 		dist = sqrt(sum(square(samples - samples_rec), 0))
 
-		self.assertTrue(all(dist < 1E-8))
+		self.assertTrue(all(dist < 1E-6))
 
 
 
@@ -68,7 +70,29 @@ class Tests(unittest.TestCase):
 
 		dist = abs(loglik_isa - loglik_gauss)
 
-		self.assertTrue(all(dist < 1E-8))
+		self.assertTrue(all(dist < 1E-6))
+
+		###
+
+		# test ICA
+		isa = ISA(3, 3, 1)
+
+		# standard normal distribution
+		gauss = GSM(3, 1)
+		gauss.scales[0] = 1.
+
+		# generate test data
+		samples = isa.sample(100)
+
+		sg = SubspaceGaussianization(isa)
+
+		# after Gaussianization, samples should be Gaussian distributed
+		loglik_isa = isa.loglikelihood(samples)
+		loglik_gauss = gauss.loglikelihood(sg(samples)) + sg.logjacobian(samples)
+
+		dist = abs(loglik_isa - loglik_gauss)
+
+		self.assertTrue(all(dist < 1E-6))
 
 
 
