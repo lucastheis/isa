@@ -40,13 +40,15 @@ class GSM(Distribution):
 
 
 
-	def train(self, data, max_iter=10):
+	def train(self, data, max_iter=10, tol=1e-5):
 		"""
 		Estimates parameters using EM.
 		"""
+
+		value = self.evaluate(data)
 		
 		if Distribution.VERBOSITY > 2:
-			print 0, self.evaluate(data) / log(2.)
+			print 0, value
 
 		for i in range(max_iter):
 			scales = self.scales.reshape(-1, 1)
@@ -66,10 +68,18 @@ class GSM(Distribution):
 				if Distribution.VERBOSITY > 0:
 					print 'Degenerated scales {0}.'.format(self.scales[indices])
 
+				# reset problematic scales
 				self.scales[indices] = 0.75 + rand(len(indices)) / 2.  
+				value = self.evaluate(data)
+
+			# check for convergence
+			value_ = self.evaluate(data)
+			if value - value_ < tol:
+				break
+			value = value_
 
 			if Distribution.VERBOSITY > 2:
-				print i + 1, self.evaluate(data) / log(2.)
+				print i + 1, value
 
 
 
