@@ -4,7 +4,7 @@ __docformat__ = 'epytext'
 
 from transform import Transform
 from scipy.stats import chi
-from scipy.special import gamma
+from scipy.special import gamma, erf, erfinv
 from scipy.optimize import bisect
 from tools import gammaincinv, logsumexp
 from numpy import sqrt, sum, square, multiply, zeros_like, zeros, log
@@ -143,13 +143,9 @@ class RadialGaussianization(Transform):
 		norm = sqrt(sum(square(data), 0))
 
 		# radial gaussianization function applied to the norm
-		tmp1 = igrcdf(rcdf(norm), self.gsm.dim)
+		norm_rg = igrcdf(rcdf(norm), self.gsm.dim)
 
-		# log of derivative of radial gaussianization function
-		logtmp2 = logdrcdf(norm) - logdgrcdf(tmp1, self.gsm.dim)
-
-		# return log of Jacobian determinant
-		return (self.gsm.dim - 1) * log(tmp1 / norm) + logtmp2
+		return logdrcdf(norm) - logdgrcdf(norm_rg, self.gsm.dim) + (self.gsm.dim - 1) * log(norm_rg / norm)
 
 
 
@@ -165,7 +161,10 @@ def grcdf(norm, dim):
 	@param dim: dimensionality of the Gaussian
 	"""
 
-	return chi.cdf(norm, dim)
+	if dim < 2:
+		return erf(norm / sqrt(2.))
+	else:
+		return chi.cdf(norm, dim)
 
 
 
@@ -180,22 +179,12 @@ def igrcdf(norm, dim):
 	@param dim: dimensionality of the Gaussian
 	"""
 
-	return sqrt(2.) * sqrt(gammaincinv(dim / 2., norm))
-
-
-
-def igrcdf(norm, dim):
-	"""
-	Inverse Gaussian radial CDF.
-	
-	@type  norm: array_like
-	@param norm: norms of the data points
-
-	@type  dim: integer
-	@param dim: dimensionality of the Gaussian
-	"""
-
-	return sqrt(2.) * sqrt(gammaincinv(dim / 2., norm))
+	if dim < 2:
+		result = erfinv(norm)
+		result[result > 6.] = 6.
+		return sqrt(2.) * result
+	else:
+		return sqrt(2.) * sqrt(gammaincinv(dim / 2., norm))
 
 
 

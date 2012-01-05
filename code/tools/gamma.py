@@ -6,7 +6,7 @@ from numpy import vectorize, nan
 from scipy.special import gammainc
 from scipy.optimize import bisect
 
-def gammaincinv(a, y, maxiter=100):
+def gammaincinv(a, y, maxiter=100, tol=1e-8):
 	"""
 	A slower but more stable implementation of the inverse regularized
 	incomplete Gamma function.
@@ -28,7 +28,7 @@ def gammaincinv(a, y, maxiter=100):
 	    a=y_min,
 	    b=gammaincinv.y_max,
 	    maxiter=maxiter,
-	    xtol=1e-16,
+	    xtol=tol,
 	    disp=True)
 
 gammaincinv = vectorize(gammaincinv)

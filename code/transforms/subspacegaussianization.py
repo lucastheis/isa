@@ -51,7 +51,8 @@ class SubspaceGaussianization(Transform):
 
 			if Transform.VERBOSITY > 0:
 				print (('\b' * (length * 2 + 2)) + '{0:>' + str(length) + '}/{1}').format(i + 1, len(self.isa.subspaces)),
-		print
+		if Transform.VERBOSITY > 0:
+			print
 
 		return vstack(data_rg)
 
@@ -78,7 +79,8 @@ class SubspaceGaussianization(Transform):
 
 			if Transform.VERBOSITY > 0:
 				print (('\b' * (length * 2 + 2)) + '{0:>' + str(length) + '}/{1}').format(i + 1, len(self.isa.subspaces)),
-		print
+		if Transform.VERBOSITY > 0:
+			print
 
 		data = vstack(data_irg)
 
@@ -124,6 +126,7 @@ class SubspaceGaussianization(Transform):
 
 			if Transform.VERBOSITY > 0:
 				print (('\b' * (length * 2 + 2)) + '{0:>' + str(length) + '}/{1}').format(i + 1, len(self.isa.subspaces)),
-		print
+		if Transform.VERBOSITY > 0:
+			print
 
 		return logjacobian

@@ -18,7 +18,10 @@ mapp.max_processes = 8
 
 # PS, SS, ND, MI, NS, ML
 parameters = [
-	['8x8', 1, 100, 50, 32, 50],
+	['8x8',   1, 100, 40, 32, 50],
+	['16x16', 1, 100, 80, 32, 50],
+	['8x8',   2, 100, 40, 32, 50],
+	['16x16', 2, 100, 80, 32, 50],
 ]
 
 def main(argv):
@@ -70,9 +73,9 @@ def main(argv):
 		model.append(ISA(data.shape[0], data.shape[0], ssize=ssize))
 		
 		# initialize, train and finetune model
-		model[-1].train(data[:, :20000], max_iter=10, method=('sgd', {'max_iter': 1}), train_prior=False)
+		model[-1].train(data[:, :20000], max_iter=20, method=('sgd', {'max_iter': 1}), train_prior=False)
 		model[-1].train(data[:, :20000], max_iter=max_iter, method=('sgd', {'max_iter': 1}))
-		model[-1].train(data[:, :num_data], max_iter=2, method='lbfgs')
+		model[-1].train(data[:, :num_data], max_iter=10, method='lbfgs')
 
 		# save model
 		experiment['num_layers'] = len(model)
