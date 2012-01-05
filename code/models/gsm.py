@@ -1,5 +1,5 @@
 """
-An implementation of a simple isotropic GSM.
+A lightweight implementation of an isotropic GSM.
 """
 
 __license__ = 'MIT License <http://www.opensource.org/licenses/mit-license.php>'
@@ -66,6 +66,7 @@ class GSM(Distribution):
 				if Distribution.VERBOSITY > 0:
 					print 'Degenerated scales {0}.'.format(self.scales[indices])
 
+				# reset scales
 				self.scales[indices] = 0.75 + rand(len(indices)) / 2.  
 
 			if Distribution.VERBOSITY > 2:
