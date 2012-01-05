@@ -1,5 +1,5 @@
 """
-An implementation of overcomplete ISA, a generalization of ICA.
+An implementation of overcomplete ISA using Gaussian scale mixtures.
 """
 
 __license__ = 'MIT License <http://www.opensource.org/licenses/mit-license.php>'
@@ -43,13 +43,12 @@ class ISA(Distribution):
 		self.num_visibles = num_visibles
 		self.num_hiddens = num_hiddens
 
-		# random linear features on the sphere
-		self.A = randn(self.num_visibles, self.num_hiddens)
-		self.A = self.A / sqrt(sum(square(self.A), 1)).reshape(-1, 1)
+		# random linear feature 
+		self.A = randn(self.num_visibles, self.num_hiddens) / 10.
 
 		# subspace densities
 		self.subspaces = [
-			GSM(ssize) for i in range(num_hiddens / ssize)]
+			GSM(ssize) for _ in range(num_hiddens / ssize)]
 
 		# initialize subspace distributions
 		for model in self.subspaces:
@@ -144,11 +143,11 @@ class ISA(Distribution):
 
 			# optimize linear features (M)
 			if method[0].lower() == 'sgd':
-				improvement = self.train_sgd(Y, **method[1])
+				improved = self.train_sgd(Y, **method[1])
 
-				# adapt learning rate
 				if adaptive:
-					method[1]['step_width'] *= 1.1 if improvement else 0.5
+					# adjust learning rate
+					method[1]['step_width'] *= 1.1 if improved else 0.5
 
 			elif method[0].lower() == 'lbfgs':
 				self.train_lbfgs(Y, **method[1])
