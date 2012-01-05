@@ -10,7 +10,7 @@ from distribution import Distribution
 from numpy.random import rand, randint, randn
 from numpy import *
 from numpy import min, max
-from scipy.stats import gamma
+from scipy.stats import gamma, rayleigh
 from tools import logmeanexp, logsumexp
 
 class GSM(Distribution):
@@ -26,12 +26,13 @@ class GSM(Distribution):
 
 	def initialize(self, method='cauchy'):
 		if method.lower() == 'student':
-			# sample scales using the Gamma distribution
 			self.scales = 1. / sqrt(gamma.rvs(1, 0, 1, size=self.num_scales))
 
 		elif method.lower() == 'cauchy':
-			# sample scales using the Gamma distribution
 			self.scales = 1. / sqrt(gamma.rvs(0.5, 0, 2, size=self.num_scales))
+
+		elif method.lower() == 'laplace':
+			self.scales = rayleigh.rvs(size=self.num_scales)
 
 		else:
 			raise ValueError('Unknown initialization method \'{0}\'.'.format(method))
@@ -42,7 +43,16 @@ class GSM(Distribution):
 
 	def train(self, data, max_iter=10, tol=1e-5):
 		"""
-		Estimates parameters using EM.
+		Fits the parameters to the given data.
+
+		@type  data: array_like
+		@param data: data stored in columns
+
+		@type  max_iter: integer
+		@param max_iter: the maximum number of EM iterations
+
+		@type  tol: float
+		@param tol: stop if performance improves less than this threshold
 		"""
 
 		value = self.evaluate(data)
@@ -132,6 +142,12 @@ class GSM(Distribution):
 	def posterior(self, data):
 		"""
 		Calculate posterior over scales.
+
+		@type  data: array_like
+		@param data: data points stored in columns
+
+		@type: ndarray
+		@return: posterior over scales
 		"""
 
 		scales = self.scales.reshape(-1, 1)

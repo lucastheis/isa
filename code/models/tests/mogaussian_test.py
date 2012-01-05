@@ -4,7 +4,7 @@ import unittest
 sys.path.append('./code')
 
 from models import MoGaussian, GSM, Distribution
-from numpy import seterr, all, abs
+from numpy import seterr, all, abs, log, square, pi
 from numpy.random import randn
 from matplotlib.pyplot import hist
 
@@ -33,17 +33,51 @@ class Tests(unittest.TestCase):
 
 
 
+	def test_loglikelihood(self):
+		# Gaussian
+		gaussian = MoGaussian(4)
+		gaussian.means[:] = 0.
+		gaussian.scales[:] = 2.
+
+		samples = gaussian.sample(100)
+
+		# should be Gaussian log-likelihood
+		loglik = gaussian.loglikelihood(samples)
+
+		# Gaussian log-likelihood
+		loglik_ = -square(samples) / 8. - log(8. * pi) / 2.
+
+		self.assertTrue(all(abs(loglik - loglik_) < 1E-8))
+
+
+
 	def test_train(self):
 		seterr(divide='raise', over='raise', invalid='raise')
 
 		gsm = GSM(1, 10)
-		gsm.initialize('cauchy')
+		gsm.initialize(method='cauchy')
 
 
 		samples = gsm.sample(5000)
 
 		mog = MoGaussian(num_components=10)
+		mog.initialize(method='laplace')
 		mog.train(samples, 100)
+
+
+
+	def test_sample_posterior(self):
+		mog = MoGaussian()
+		samples = mog.sample(1000)
+
+		means, scales = mog.sample_posterior(samples)
+
+		self.assertTrue(samples.ndim == 2)
+		self.assertTrue(samples.shape[0] == 1)
+		self.assertTrue(means.ndim == 2)
+		self.assertTrue(means.shape[0] == 1)
+		self.assertTrue(scales.ndim == 2)
+		self.assertTrue(scales.shape[0] == 1)
 
 
 
