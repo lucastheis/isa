@@ -118,8 +118,6 @@ class ICA(Distribution):
 		# update linear features
 		self.A = A
 
-		print '\t', mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
-
 		return True
 
 
