@@ -23,9 +23,12 @@ class ICA(Distribution):
 		self.marginals = [
 			MoGaussian() for _ in range(dim)]
 
+		for m in self.marginals:
+			m.initialize()
 
 
-	def train(self, X, method=('sgd', {})):
+
+	def train(self, X, method=('sgd', {}), **kwargs):
 		max_iter = kwargs.get('max_iter', 100)
 		adaptive = kwargs.get('adaptive', True) 
 		train_prior = kwargs.get('train_prior', True)
@@ -114,6 +117,8 @@ class ICA(Distribution):
 
 		# update linear features
 		self.A = A
+
+		print '\t', mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
 
 		return True
 
@@ -211,9 +216,10 @@ class ICA(Distribution):
 		Gradient of log-likelihood with respect to hidden state.
 		"""
 
-		def parfor(i):
-			return self.marginals[i].energy_gradient(Y[[i]])
-		return vstack(mapp(parfor, range(self.dim)))
+		energy_gradient = zeros([self.dim, Y.shape[1]])
+		for i in range(self.dim):
+			energy_gradient[i] = self.marginals[i].energy_gradient(Y[[i]])
+		return energy_gradient
 
 
 
@@ -228,9 +234,10 @@ class ICA(Distribution):
 		@return: the negative log-porbability of each data point
 		"""
 
-		def parfor(i):
-			return self.marginals[i].energy(Y[[i]])
-		return sum(mapp(parfor, range(self.dim)), 0)
+		energy = zeros([1, Y.shape[1]])
+		for i in range(self.dim):
+			energy += self.marginals[i].energy(Y[[i]])
+		return energy
 
 
 
@@ -245,9 +252,10 @@ class ICA(Distribution):
 		@return: the log-probability of each data point
 		"""
 
-		def parfor(i):
-			return self.marginals[i].loglikelihood(Y[[i]])
-		return vstack(mapp(parfor, range(self.dim)))
+		loglik = zeros([1, Y.shape[1]])
+		for i in range(self.dim):
+			loglik += self.marginals[i].loglikelihood(Y[[i]])
+		return loglik
 
 
 

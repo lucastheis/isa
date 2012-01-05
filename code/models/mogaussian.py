@@ -14,7 +14,7 @@ from scipy.stats import gamma, rayleigh
 from tools import logsumexp
 
 class MoGaussian(Distribution):
-	def __init__(self, num_components=4):
+	def __init__(self, num_components=8):
 		self.num_components = num_components
 
 		# regularization of prior weights
