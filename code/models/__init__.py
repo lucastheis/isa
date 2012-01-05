@@ -4,5 +4,6 @@ __docformat__ = 'epytext'
 
 from distribution import Distribution
 from isa import ISA
+from ica import ICA
 from gsm import GSM
 from mogaussian import MoGaussian
