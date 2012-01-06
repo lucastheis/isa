@@ -145,7 +145,10 @@ class RadialGaussianization(Transform):
 		# radial gaussianization function applied to the norm
 		norm_rg = igrcdf(rcdf(norm), self.gsm.dim)
 
-		return logdrcdf(norm) - logdgrcdf(norm_rg, self.gsm.dim) + (self.gsm.dim - 1) * log(norm_rg / norm)
+		logj = logdrcdf(norm) - \
+			logdgrcdf(norm_rg, self.gsm.dim) + (self.gsm.dim - 1) * log(norm_rg / norm)
+
+		return logj.reshape(1, -1)
 
 
 

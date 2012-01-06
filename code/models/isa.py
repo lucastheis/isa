@@ -13,6 +13,7 @@ from numpy.random import randint, randn, rand, logseries, permutation
 from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b, check_grad
+from scipy.stats import laplace
 from tools import gaborf, mapp, whiten, logmeanexp, asshmarray
 from gsm import GSM
 from copy import deepcopy
@@ -88,6 +89,18 @@ class ISA(Distribution):
 		elif method.lower() == 'random':
 			# initialize with Gaussian white noise
 			self.A = randn(num_visibles, num_hiddens)
+
+		elif method.lower() == 'laplace':
+			# fit mixture of Gaussian to multivariate Laplace
+			samples = randn(self.subspaces[0].dim, 10000)
+			samples = samples / sqrt(sum(square(samples), 0))
+			samples = laplace.rvs(size=[1, 10000]) * samples
+
+			gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
+			gsm.train(samples, max_iter=100)
+
+			for m in self.subspaces:
+				m.scales = gsm.scales.copy()
 
 		else:
 			raise ValueError('Unknown initialization method \'{0}\'.'.format(method))
@@ -675,7 +688,6 @@ class ISA(Distribution):
 
 		gradient = []
 
-		# TODO: parallelize
 		for model in self.subspaces:
 			gradient.append(
 				model.energy_gradient(Y[:model.dim]))

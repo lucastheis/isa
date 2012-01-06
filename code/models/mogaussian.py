@@ -27,7 +27,7 @@ class MoGaussian(Distribution):
 
 
 
-	def initialize(self, method='laplace'):
+	def initialize(self, method='student'):
 		"""
 		Randomly initializes parameters.
 		"""
@@ -46,6 +46,17 @@ class MoGaussian(Distribution):
 
 		else:
 			raise ValueError('Unknown initialization method \'{0}\'.'.format(method))
+
+
+
+	def normalize(self):
+		"""
+		Normalizes the scales so that the standard deviation of the GSM becomes 1.
+		"""
+
+		factor = 1. / sqrt(mean(square(self.scales)))
+		self.scales *= factor
+		self.means *= factor
 
 
 

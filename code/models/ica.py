@@ -10,6 +10,7 @@ from numpy import *
 from numpy.linalg import inv, det, slogdet
 from numpy.random import *
 from scipy.optimize import fmin_l_bfgs_b
+from scipy.stats import laplace, t
 from distribution import Distribution
 from mogaussian import MoGaussian
 from tools import mapp
@@ -25,6 +26,26 @@ class ICA(Distribution):
 
 		for m in self.marginals:
 			m.initialize()
+
+
+
+	def initialize(self, method='laplace'):
+		# fit mixture of Gaussian to Laplace
+		mog = MoGaussian(num_components=self.marginals[0].num_components)
+
+		if method.lower() == 'laplace':
+			mog.train(laplace.rvs(size=[1, 10000]), max_iter=100)
+
+		elif method.lower() == 'student':
+			mog.train(t.rvs(1, size=[1, 10000]), max_iter=100)
+
+		else:
+			raise ValueError('Unknown initialization method \'{0}\'.'.format(method))
+
+		for m in self.marginals:
+			m.priors = mog.priors.copy()
+			m.scales = mog.scales.copy()
+			m.means = mog.means.copy()
 
 
 
@@ -56,7 +77,7 @@ class ICA(Distribution):
 					method[1]['step_width'] *= 1.1 if improved else 0.5
 
 			elif method[0].lower() == 'lbfgs':
-				self.train_lbfgs(Y, **method[1])
+				self.train_lbfgs(X, **method[1])
 
 			if Distribution.VERBOSITY > 0:
 				print i + 1, self.evaluate(X)
@@ -66,6 +87,7 @@ class ICA(Distribution):
 	def train_prior(self, Y, **kwargs):
 		def parfor(i):
 			self.marginals[i].train(Y[[i]], **kwargs)
+			self.marginals[i].normalize()
 		mapp(parfor, range(self.dim))
 
 
