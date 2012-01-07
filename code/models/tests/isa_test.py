@@ -30,7 +30,8 @@ class Tests(unittest.TestCase):
 		self.assertTrue(all(abs(G - N) < 1E-5))
 
 
-	def test_training(self):
+
+	def test_train(self):
 		isa = ISA(2, 2)
 		data = isa.sample(1000)
 
@@ -39,6 +40,22 @@ class Tests(unittest.TestCase):
 
 		# make sure L-BFGS training doesn't throw any errors
 		isa.train_lbfgs(data, max_fun=1)
+	
+
+
+	def test_train_subspaces(self):
+		isa = ISA(4, 4, 2)
+		isa.initialize(method='laplace')
+
+		samples = isa.sample_prior(10000)
+
+		isa = ISA(4, 4, 1)
+		isa.initialize(method='laplace')
+
+		isa.train_subspaces(samples, max_merge=5)
+		isa.train_subspaces(samples, max_merge=5)
+
+		self.assertTrue(len(isa.subspaces) == 2)
 
 
 
