@@ -5,3 +5,5 @@ __docformat__ = 'epytext'
 from transform import Transform
 from radialgaussianization import RadialGaussianization
 from subspacegaussianization import SubspaceGaussianization
+from univariategaussianization import UnivariateGaussianization
+from marginalgaussianization import MarginalGaussianization

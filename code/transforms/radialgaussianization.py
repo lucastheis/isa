@@ -50,7 +50,7 @@ class RadialGaussianization(Transform):
 
 
 
-	def inverse(self, data, maxiter=100):
+	def inverse(self, data, max_iter=100):
 		"""
 		Applies the inverse transformation to the given set of data points.
 
@@ -87,7 +87,7 @@ class RadialGaussianization(Transform):
 			    f=lambda x: rcdf(x) - norm[t],
 			    a=0.,
 			    b=norm_max,
-			    maxiter=maxiter,
+			    maxiter=max_iter,
 			    disp=False)
 
 		# inverse radial Gaussianization

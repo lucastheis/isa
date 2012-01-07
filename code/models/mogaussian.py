@@ -8,9 +8,9 @@ __docformat__ = 'epytext'
 
 from distribution import Distribution
 from numpy import ones, square, sum, multiply, log, exp, mean, std, where, sqrt, pi, round
-from numpy import cumsum, zeros
+from numpy import cumsum, zeros, asarray
 from numpy.random import randn, rand, multinomial, permutation
-from scipy.stats import gamma, rayleigh
+from scipy.stats import gamma, rayleigh, norm
 from tools import logsumexp
 
 class MoGaussian(Distribution):
@@ -80,7 +80,7 @@ class MoGaussian(Distribution):
 			print 0, value
 
 		# make sure data has the right shape
-		data = data.reshape(1, -1)
+		data = asarray(data).reshape(1, -1)
 
 		for i in range(max_iter):
 			# reshape parameters
@@ -148,7 +148,7 @@ class MoGaussian(Distribution):
 
 	def loglikelihood(self, data):
 		# make sure data has right shape
-		data = data.reshape(1, -1)
+		data = asarray(data).reshape(1, -1)
 
 		return -self.energy(data) - 0.5 * log(2. * pi)
 
@@ -156,7 +156,7 @@ class MoGaussian(Distribution):
 
 	def energy(self, data):
 		# make sure data has right shape
-		data = data.reshape(1, -1)
+		data = asarray(data).reshape(1, -1)
 
 		# reshape parameters
 		priors = self.priors.reshape(-1, 1)
@@ -173,7 +173,7 @@ class MoGaussian(Distribution):
 
 	def energy_gradient(self, data):
 		# make sure data has right shape
-		data = data.reshape(1, -1)
+		data = asarray(data).reshape(1, -1)
 
 		# reshape parameters
 		priors = self.priors.reshape(-1, 1)
@@ -202,7 +202,7 @@ class MoGaussian(Distribution):
 		"""
 
 		# make sure data has right shape
-		data = data.reshape(1, -1)
+		data = asarray(data).reshape(1, -1)
 
 		# reshape parameters
 		priors = self.priors.reshape(-1, 1)
@@ -231,7 +231,7 @@ class MoGaussian(Distribution):
 		"""
 
 		# make sure data has right shape
-		data = data.reshape(1, -1)
+		data = asarray(data).reshape(1, -1)
 
 		cmf = cumsum(self.posterior(data), 0)
 
@@ -245,3 +245,23 @@ class MoGaussian(Distribution):
 
 		return self.means[indices].reshape(1, -1), \
 			self.scales[indices].reshape(1, -1)
+
+
+
+	def cdf(self, data):
+		"""
+		Cumulative distribution function.
+		"""
+
+		# make sure data has right shape
+		data = asarray(data).reshape(1, -1)
+
+		# reshape parameters
+		priors = self.priors.reshape(-1, 1)
+		means = self.means.reshape(-1, 1)
+		scales = self.scales.reshape(-1, 1)
+
+		# normalize data
+		data = (data - means) / scales
+
+		return sum(multiply(norm.cdf(data), priors), 0).reshape(1, -1)

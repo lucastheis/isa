@@ -77,11 +77,11 @@ class Tests(unittest.TestCase):
 
 		self.assertTrue(all(dist < 1E-6))
 
+		###
+
 		# test one-dimensional Gaussian
 		gsm = GSM(1, 10)
 		gsm.initialize('cauchy')
-
-		###
 
 		# standard normal distribution
 		gauss = GSM(1, 1)
