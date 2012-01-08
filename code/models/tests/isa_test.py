@@ -3,8 +3,10 @@ import unittest
 
 sys.path.append('./code')
 
-from models import ISA
+from models import ISA, Distribution
 from numpy import zeros, all, abs
+
+Distribution.VERBOSITY = 0
 
 class Tests(unittest.TestCase):
 	def test_prior_energy(self):

@@ -148,15 +148,16 @@ class ISA(Distribution):
 			# complete data (E)
 			Y = self.sample_posterior(X, method=sampling_method)
 
-			# used to initialize sampling procedure in next iteration
-			sampling_method[1]['Y'] = Y
-
-			# optimize parameters of the prior (M)
 			if train_prior:
+				# optimize parameters of the prior (M)
 				self.train_prior(Y)
 
 			if train_subspaces:
-				self.train_subspaces(Y)
+				# learn subspaces (M)
+				Y = self.train_subspaces(Y)
+
+			# used to initialize sampling procedure in next iteration
+			sampling_method[1]['Y'] = Y
 
 			# optimize linear features (M)
 			if method[0].lower() == 'sgd':
@@ -206,16 +207,20 @@ class ISA(Distribution):
 
 	def train_subspaces(self, Y, **kwargs):
 		"""
-		Improves likelihood through spliting and merging of subspaces.
+		Improves likelihood through spliting and merging of subspaces. This function
+		may rearrange the order of subspaces and corresponding linear features.
 
 		@type  max_merge: integer
 		@param max_merge: maximum number of subspaces merged
 
 		@type  Y: array_like
 		@param Y: hidden states
+
+		@rtype: ndarray
+		@return: data rearranged so that it aligns with subspaces
 		"""
 
-		max_merge = kwargs.get('max_merge', 5)
+		max_merge = kwargs.get('max_merge', 10)
 		max_iter = kwargs.get('max_iter', 10)
 
 		# calculate indices for each subspace
@@ -269,9 +274,11 @@ class ISA(Distribution):
 				self.A = hstack([self.A, self.A[:, subspace_indices]])
 				self.A = delete(self.A, subspace_indices, 1)
 
-				# remove subspaces (which no longer exist)
+				# rearrange data
+				Y = vstack([Y, Y[subspace_indices, :]])
 				Y = delete(Y, subspace_indices, 0)
 
+				# remove subspaces from correlation matrix
 				corr = delete(corr, [row, col], 0)
 				corr = delete(corr, [row, col], 1)
 
@@ -297,6 +304,8 @@ class ISA(Distribution):
 
 				if corr.size == 0:
 					break
+
+			return Y
 
 
 
