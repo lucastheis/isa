@@ -156,7 +156,10 @@ class ISA(Distribution):
 				# learn subspaces (M)
 				Y = self.train_subspaces(Y)
 
-			# used to initialize sampling procedure in next iteration
+			if train_prior or train_subspaces:
+				self.normalize_prior()
+
+			# initializes sampling procedure in next iteration
 			sampling_method[1]['Y'] = Y
 
 			# optimize linear features (M)
@@ -198,10 +201,19 @@ class ISA(Distribution):
 		def parfor(i):
 			model = self.subspaces[i]
 			model.train(Y[offset[i]:offset[i] + model.dim])
-			model.normalize()
 			return model
 
 		self.subspaces = mapp(parfor, range(len(self.subspaces)))
+
+
+
+	def normalize_prior(self):
+		"""
+		Normalizes the standard deviation of each subspace distribution.
+		"""
+
+		for gsm in self.subspaces:
+			gsm.normalize()
 
 
 
@@ -227,14 +239,14 @@ class ISA(Distribution):
 		max_iter = kwargs.get('max_iter', 10)
 
 		if len(self.subspaces) > 1:
-			# calculate indices for each subspace
+			# compute indices for each subspace
 			indices = []
 			index = 0
 			for gsm in self.subspaces:
 				indices.append(arange(gsm.dim) + index)
 				index += gsm.dim
 
-			# calculate subspace energies
+			# compute subspace energies
 			energies = []
 			for i, gsm in enumerate(self.subspaces):
 				energies.append(sqrt(sum(square(Y[indices[i]]), 0)))
