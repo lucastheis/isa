@@ -7,8 +7,8 @@ import sys
 sys.path.append('./code')
 
 from numpy import *
-from models import ISA, Distribution
-from transforms import SubspaceGaussianization
+from models import ISA, ICA, Distribution
+from transforms import SubspaceGaussianization, MarginalGaussianization
 from tools import Experiment, preprocess, mapp
 
 Distribution.VERBOSITY = 1
@@ -70,7 +70,10 @@ def main(argv):
 	experiment['model'] = model
 
 	for _ in range(max_layers - 1):
-		model.append(ISA(data.shape[0], data.shape[0], ssize=ssize))
+		if ssize > 1:
+			model.append(ISA(data.shape[0], data.shape[0], ssize=ssize))
+		else:
+			model.append(ICA(data.shape[0]))
 		
 		# initialize, train and finetune model
 		model[-1].train(data[:, :20000], max_iter=20, method=('sgd', {'max_iter': 1}), train_prior=False)
@@ -88,12 +91,18 @@ def main(argv):
 		print
 
 		# subspace Gaussianization transform
-		sg = SubspaceGaussianization(model[-1])
+		if ssize > 1:
+			sg = SubspaceGaussianization(model[-1])
+		else:
+			sg = MarginalGaussianization(model[-1])
 		logjacobian += mean(sg.logjacobian(data[:, :num_data]))
 		data = sg(data[:, :num_data])
 
 	# top layer
-	model.append(ISA(data.shape[0], data.shape[0], ssize=ssize))
+	if ssize > 1:
+		model.append(ISA(data.shape[0], data.shape[0], ssize=ssize))
+	else:
+		model.append(ICA(data.shape[0]))
 	
 	# train and finetune model
 	model[-1].train(data[:, :20000], max_iter=max_iter, method=('sgd', {'max_iter': 1}))

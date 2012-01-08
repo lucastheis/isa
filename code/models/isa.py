@@ -127,7 +127,7 @@ class ISA(Distribution):
 		max_iter = kwargs.get('max_iter', 100)
 		adaptive = kwargs.get('adaptive', True) 
 		train_prior = kwargs.get('train_prior', True)
-		train_subspaces = kwargs.get('train_subspaces', True)
+		train_subspaces = kwargs.get('train_subspaces', False)
 
 		if Distribution.VERBOSITY > 0:
 			if self.num_hiddens > self.num_visibles:
@@ -155,7 +155,7 @@ class ISA(Distribution):
 			if train_prior:
 				self.train_prior(Y)
 
-			if train_subspaces(Y):
+			if train_subspaces:
 				self.train_subspaces(Y)
 
 			# optimize linear features (M)

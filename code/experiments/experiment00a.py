@@ -20,14 +20,14 @@ def main(argv):
 
 	data = RadialGaussianization(gsm).apply(data)
 
-	isa = ISA(data.shape[0])
+	ica = ICA(data.shape[0])
 
-	isa.initialize(method='laplace')
-	isa.train(data[:20000], max_iter=20, method='sgd', train_prior=False)
-	isa.train(data[:50000], max_iter=5, method='lbfgs')
+	ica.initialize(method='laplace')
+	ica.train(data[:20000], max_iter=20, method='sgd', train_prior=False)
+	ica.train(data[:50000], max_iter=5, method='lbfgs')
 
 	experiment['gsm'] = gsm
-	experiment['ica'] = isa
+	experiment['ica'] = ica
 	experiment.save('results/experiment00a/experiment00a.{0}.{1}.xpck')
 
 	return 0
