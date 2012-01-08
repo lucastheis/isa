@@ -16,22 +16,23 @@ Distribution.VERBOSITY = 1
 # number of processors used
 mapp.max_processes = 8
 
-# PS, SS, ND, MI, NS, ML
+# PS, SS, ND, MI, NS, ML, LS
 parameters = [
-	['8x8',   1, 100, 40, 32, 50],
-	['16x16', 1, 100, 80, 32, 50],
-	['8x8',   2, 100, 40, 32, 50],
-	['16x16', 2, 100, 80, 32, 50],
+	['8x8',   1, 100, 40, 32, 50, False],
+	['16x16', 1, 100, 80, 32, 50, False],
+	['8x8',   2, 100, 40, 32, 50, False],
+	['16x16', 2, 100, 80, 32, 50, False],
+	['8x8',   1, 100, 40, 32, 50, True],
 ]
 
 def main(argv):
 	if len(argv) < 2:
 		print 'Usage:', argv[0], '<params_id>'
 		print
-		print '  {0:>3} {1:>5} {2:>3} {3:>5} {4:>4} {5:>5} {6:>3}'.format('ID', 'PS', 'SS', 'ND', 'MI', 'NS', 'ML')
+		print '  {0:>3} {1:>5} {2:>3} {3:>5} {4:>4} {5:>5} {6:>3} {7:>5}'.format('ID', 'PS', 'SS', 'ND', 'MI', 'NS', 'ML', 'LS')
 
 		for id, params in enumerate(parameters):
-			print '  {0:>3} {1:>5} {2:>3} {3:>4}k {4:>4} {5:>5} {6:>3}'.format(id, *params)
+			print '  {0:>3} {1:>5} {2:>3} {3:>4}k {4:>4} {5:>5} {6:>3} {7:>5}'.format(id, *params)
 
 		print
 		print '  ID = parameter set'
@@ -41,13 +42,14 @@ def main(argv):
 		print '  MI = maximum number of training epochs'
 		print '  NS = inverse noise level'
 		print '  ML = maximum number of layers'
+		print '  LS = learn subspace sizes'
 
 		return 0
 
 	seterr(invalid='raise', over='raise', divide='raise')
 
 	# hyperparameters
-	patch_size, ssize, num_data, max_iter, noise_level, max_layers = parameters[int(argv[1])]
+	patch_size, ssize, num_data, max_iter, noise_level, max_layers, train_subspaces = parameters[int(argv[1])]
 	num_data *= 1000
 
 	# start experiment
@@ -70,15 +72,18 @@ def main(argv):
 	experiment['model'] = model
 
 	for _ in range(max_layers - 1):
-		if ssize > 1:
+		if ssize > 1 or train_subspaces:
 			model.append(ISA(data.shape[0], data.shape[0], ssize=ssize))
 		else:
 			model.append(ICA(data.shape[0]))
 		
 		# initialize, train and finetune model
-		model[-1].train(data[:, :20000], max_iter=20, method=('sgd', {'max_iter': 1}), train_prior=False)
-		model[-1].train(data[:, :20000], max_iter=max_iter, method=('sgd', {'max_iter': 1}))
-		model[-1].train(data[:, :num_data], max_iter=10, method='lbfgs')
+		model[-1].train(data[:, :20000], max_iter=20, method=('sgd', {'max_iter': 1}),
+				train_prior=False, train_subspaces=False)
+		model[-1].train(data[:, :20000], max_iter=max_iter, method=('sgd', {'max_iter': 1}),
+				train_prior=True, train_subspaces=train_subspaces)
+		model[-1].train(data[:, :num_data], max_iter=10, method='lbfgs',
+				train_prior=True, train_subspaces=train_subspaces)
 
 		# save model
 		experiment['num_layers'] = len(model)
@@ -91,7 +96,7 @@ def main(argv):
 		print
 
 		# subspace Gaussianization transform
-		if ssize > 1:
+		if ssize > 1 or train_subspaces:
 			sg = SubspaceGaussianization(model[-1])
 		else:
 			sg = MarginalGaussianization(model[-1])
@@ -99,7 +104,7 @@ def main(argv):
 		data = sg(data[:, :num_data])
 
 	# top layer
-	if ssize > 1:
+	if ssize > 1 or train_subspaces:
 		model.append(ISA(data.shape[0], data.shape[0], ssize=ssize))
 	else:
 		model.append(ICA(data.shape[0]))
