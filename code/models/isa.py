@@ -213,6 +213,9 @@ class ISA(Distribution):
 		@type  max_merge: integer
 		@param max_merge: maximum number of subspaces merged
 
+		@type  max_iter: integer
+		@param max_iter: maximum number of iterations for training joint L{GSM}
+
 		@type  Y: array_like
 		@param Y: hidden states
 
@@ -220,7 +223,7 @@ class ISA(Distribution):
 		@return: data rearranged so that it aligns with subspaces
 		"""
 
-		max_merge = kwargs.get('max_merge', 10)
+		max_merge = kwargs.get('max_merge', self.num_hiddens)
 		max_iter = kwargs.get('max_iter', 10)
 
 		# calculate indices for each subspace
@@ -263,8 +266,8 @@ class ISA(Distribution):
 
 			# log-likelihood improvement
 			mi = mean(gsm.loglikelihood(Y_jnt) \
-				- self.subspaces[col].loglikelihood(Y_row) \
-				- self.subspaces[row].loglikelihood(Y_col))
+				- self.subspaces[col].loglikelihood(Y_col) \
+				- self.subspaces[row].loglikelihood(Y_row))
 
 			if mi > 0:
 				self.subspaces.append(gsm)
