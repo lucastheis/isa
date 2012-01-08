@@ -226,87 +226,87 @@ class ISA(Distribution):
 		max_merge = kwargs.get('max_merge', self.num_hiddens)
 		max_iter = kwargs.get('max_iter', 10)
 
-		# calculate indices for each subspace
-		indices = []
-		index = 0
-		for gsm in self.subspaces:
-			indices.append(arange(gsm.dim) + index)
-			index += gsm.dim
+		if len(self.subspaces) > 1:
+			# calculate indices for each subspace
+			indices = []
+			index = 0
+			for gsm in self.subspaces:
+				indices.append(arange(gsm.dim) + index)
+				index += gsm.dim
 
-		# calculate subspace energies
-		energies = []
-		for i, gsm in enumerate(self.subspaces):
-			energies.append(sqrt(sum(square(Y[indices[i]]), 0)))
-		energies = vstack(energies)
+			# calculate subspace energies
+			energies = []
+			for i, gsm in enumerate(self.subspaces):
+				energies.append(sqrt(sum(square(Y[indices[i]]), 0)))
+			energies = vstack(energies)
 
-		# determine correlation of subspace energies
-		corr = corrcoef(energies)
-		corr = corr - triu(corr)
+			# determine correlation of subspace energies
+			corr = corrcoef(energies)
+			corr = corr - triu(corr)
 
-		for _ in range(max_merge):
-			# pick subspaces with maximal correlation
-			col = argmax(max(corr, 0))
-			row = argmax(corr[:, col])
+			for _ in range(max_merge):
+				# pick subspaces with maximal correlation
+				col = argmax(max(corr, 0))
+				row = argmax(corr[:, col])
 
-			if corr[row, col] <= 0.:
-				break
-
-			# make sure subspace combination won't be selected again
-			corr[row, col] = 0.
-
-			# extract data from subspaces
-			Y_row = Y[indices[row]]
-			Y_col = Y[indices[col]]
-			Y_jnt = vstack([Y_row, Y_col])
-
-			# train joint model
-			gsm = GSM(Y_jnt.shape[0], self.subspaces[col].num_scales)
-			gsm.scales = self.subspaces[col].scales.copy()
-			gsm.train(Y_jnt, max_iter=max_iter)
-
-			# log-likelihood improvement
-			mi = mean(gsm.loglikelihood(Y_jnt) \
-				- self.subspaces[col].loglikelihood(Y_col) \
-				- self.subspaces[row].loglikelihood(Y_row))
-
-			if mi > 0:
-				self.subspaces.append(gsm)
-
-				# rearrange linear filters
-				subspace_indices = concatenate([indices[row], indices[col]])
-				self.A = hstack([self.A, self.A[:, subspace_indices]])
-				self.A = delete(self.A, subspace_indices, 1)
-
-				# rearrange data
-				Y = vstack([Y, Y[subspace_indices, :]])
-				Y = delete(Y, subspace_indices, 0)
-
-				# remove subspaces from correlation matrix
-				corr = delete(corr, [row, col], 0)
-				corr = delete(corr, [row, col], 1)
-
-				# update indices
-				for k in range(row + 1, len(indices)):
-					indices[k] -= self.subspaces[row].dim
-				for k in range(col + 1, len(indices)):
-					indices[k] -= self.subspaces[col].dim
-
-				if row < col:
-					del self.subspaces[col]
-					del self.subspaces[row]
-					del indices[col]
-					del indices[row]
-				else:
-					del self.subspaces[row]
-					del self.subspaces[col]
-					del indices[row]
-					del indices[col]
-
-				if Distribution.VERBOSITY > 0:
-					print 'Merged subspaces.'
-
-				if corr.size == 0:
+				if corr[row, col] <= 0.:
 					break
+
+				corr[row, col] = 0.
+
+				# extract data from subspaces
+				Y_row = Y[indices[row]]
+				Y_col = Y[indices[col]]
+				Y_jnt = vstack([Y_row, Y_col])
+
+				# train joint model
+				gsm = GSM(Y_jnt.shape[0], self.subspaces[col].num_scales)
+				gsm.scales = self.subspaces[col].scales.copy()
+				gsm.train(Y_jnt, max_iter=max_iter)
+
+				# log-likelihood improvement
+				mi = mean(gsm.loglikelihood(Y_jnt) \
+					- self.subspaces[col].loglikelihood(Y_col) \
+					- self.subspaces[row].loglikelihood(Y_row))
+
+				if mi > 0:
+					self.subspaces.append(gsm)
+
+					# rearrange linear filters
+					subspace_indices = concatenate([indices[row], indices[col]])
+					self.A = hstack([self.A, self.A[:, subspace_indices]])
+					self.A = delete(self.A, subspace_indices, 1)
+
+					# rearrange data
+					Y = vstack([Y, Y[subspace_indices, :]])
+					Y = delete(Y, subspace_indices, 0)
+
+					# remove subspaces from correlation matrix
+					corr = delete(corr, [row, col], 0)
+					corr = delete(corr, [row, col], 1)
+
+					# update indices
+					for k in range(row + 1, len(indices)):
+						indices[k] -= self.subspaces[row].dim
+					for k in range(col + 1, len(indices)):
+						indices[k] -= self.subspaces[col].dim
+
+					if row < col:
+						del self.subspaces[col]
+						del self.subspaces[row]
+						del indices[col]
+						del indices[row]
+					else:
+						del self.subspaces[row]
+						del self.subspaces[col]
+						del indices[row]
+						del indices[col]
+
+					if Distribution.VERBOSITY > 0:
+						print 'Merged subspaces.'
+
+					if corr.size == 0:
+						break
 
 			return Y
 
