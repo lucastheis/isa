@@ -7,3 +7,4 @@ from isa import ISA
 from ica import ICA
 from gsm import GSM
 from mogaussian import MoGaussian
+from concatmodel import ConcatModel

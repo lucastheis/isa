@@ -7,3 +7,5 @@ from radialgaussianization import RadialGaussianization
 from subspacegaussianization import SubspaceGaussianization
 from univariategaussianization import UnivariateGaussianization
 from marginalgaussianization import MarginalGaussianization
+from lineartransform import LinearTransform
+from whiteningtransform import WhiteningTransform

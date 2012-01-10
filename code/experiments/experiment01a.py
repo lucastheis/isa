@@ -10,13 +10,14 @@ sys.path.append('./code')
 
 from numpy import *
 from numpy.random import randn
-from models import ISA, GSM, Distribution
+from models import ISA, MoGaussian, ConcatModel, Distribution
+from transforms import LinearTransform, WhiteningTransform
 from tools import preprocess, Experiment, mapp
 
 mapp.max_processes = 12
 Distribution.VERBOSITY = 2
 
-from numpy import round
+from numpy import round, sqrt
 from numpy.linalg import svd
 
 # PS, SS, OC, ND, MI, NS, MC
@@ -64,34 +65,75 @@ def main(argv):
 
 	seterr(invalid='raise', over='raise', divide='raise')
 
-	# hyperparameters
-	patch_size, ssize, overcompleteness, num_data, max_iter, noise_level, num_steps = parameters[int(argv[1])]
-	num_data *= 1000
+
 
 	# start experiment
 	experiment = Experiment()
 
-	# load natural image patches
+
+
+	# hyperparameters
+	patch_size, \
+	ssize, \
+	overcompleteness, \
+	num_data, \
+	max_iter, \
+	noise_level, \
+	num_steps = parameters[int(argv[1])]
+	num_data = num_data * 1000
+
+
+
+
+	# load data, log-transform and center data
 	data = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
+	data = preprocess(data, noise_level=noise_level)
+	
+	# apply DCT to data
+	dct = LinearTransform(dim=int(sqrt(data.shape[0])), basis='DCT')
+	data = dct(data)
 
-	# log-transform data, whiten data, and add some noise
-	data, whitening_matrix = preprocess(data, return_whitening_matrix=True, noise_level=noise_level)
+	# whiten data
+	wt = WhiteningTransform(data, symmetric=True)
+	data = wt(data)
 
-	# create model
-	model = ISA(data.shape[0], data.shape[0] * overcompleteness, ssize=ssize)
 
-	# initialize, train and finetune model
-	model.train(data[:, :20000], max_iter=max_iter, 
-		method=('sgd', {'max_iter': 1}),
+
+	# model DC component separately
+	model = ConcatModel(
+		MoGaussian(10), 
+		ISA(data.shape[0] - 1, (data.shape[0] - 1) * overcompleteness, ssize=ssize))
+
+	# train mixture model on DC component
+	model[0].train(data[:1], max_iter=100)
+
+	# initialize, train and finetune ISA model
+	model[1].initialize(method='laplace')
+
+	model[1].train(data[1:, :20000], 
+		max_iter=20, 
+		train_prior=False,
+		method=('sgd', {'max_iter': 1}), 
 		sampling_method=('gibbs', {'num_steps': num_steps}))
-	model.train(data[:, :num_data], max_iter=10, 
+
+	model[1].train(data[1:, :20000], 
+		max_iter=max_iter, 
+		train_prior=True,
+		method=('sgd', {'max_iter': 1}), 
+		sampling_method=('gibbs', {'num_steps': num_steps}))
+
+	model[1].train(data[1:, :num_data],
+		max_iter=10,
+		train_prior=True,
 		method='lbfgs', 
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 
+
+
 	# save results
-	experiment['model'] = model
 	experiment['parameters'] = parameters[int(argv[1])]
-	experiment['whitening_matrix'] = whitening_matrix
+	experiment['transforms'] = [dct, wt]
+	experiment['model'] = model
 	experiment.save('results/experiment01a/experiment01a.{0}.{1}.xpck')
 
 	return 0

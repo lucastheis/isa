@@ -13,8 +13,8 @@ from numpy.random import randint, randn, rand, logseries, permutation
 from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b, check_grad
-from scipy.stats import laplace
-from tools import gaborf, mapp, whiten, logmeanexp, asshmarray
+from scipy.stats import laplace, t
+from tools import gaborf, mapp, logmeanexp, asshmarray
 from gsm import GSM
 from copy import deepcopy
 
@@ -41,6 +41,7 @@ class ISA(Distribution):
 		if mod(num_hiddens, ssize):
 			raise ValueError('num_hiddens must be a multiple of ssize.')
 
+		self.dim = num_visibles
 		self.num_visibles = num_visibles
 		self.num_hiddens = num_hiddens
 
@@ -95,6 +96,18 @@ class ISA(Distribution):
 			samples = randn(self.subspaces[0].dim, 10000)
 			samples = samples / sqrt(sum(square(samples), 0))
 			samples = laplace.rvs(size=[1, 10000]) * samples
+
+			gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
+			gsm.train(samples, max_iter=100)
+
+			for m in self.subspaces:
+				m.scales = gsm.scales.copy()
+
+		elif method.lower() == 'student':
+			# fit mixture of Gaussian to multivariate Laplace
+			samples = randn(self.subspaces[0].dim, 10000)
+			samples = samples / sqrt(sum(square(samples), 0))
+			samples = t.rvs(2, size=[1, 10000]) * samples
 
 			gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
 			gsm.train(samples, max_iter=100)
@@ -388,7 +401,7 @@ class ISA(Distribution):
 
 				if not batch.shape[1] < batch_size:
 					W, _, _ = fmin_l_bfgs_b(f, W.flatten(), df, (batch,), maxfun=max_fun,
-						disp=1 if Distribution.VERBOSITY > 1 else 0, iprint=0)
+						disp=1 if Distribution.VERBOSITY > 2 else 0, iprint=0)
 
 		if pocket:
 			# test for improvement of lower bound

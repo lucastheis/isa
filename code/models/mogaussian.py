@@ -15,10 +15,8 @@ from tools import logsumexp
 
 class MoGaussian(Distribution):
 	def __init__(self, num_components=8):
+		self.dim = 1
 		self.num_components = num_components
-
-		# regularization of prior weights
-		self.alpha = None
 
 		# prior weights, means and standard deviations
 		self.priors = ones(num_components) / num_components
@@ -112,11 +110,6 @@ class MoGaussian(Distribution):
 			self.priors = sum(post, 1) / sum(post)
 			self.means = sum(multiply(data, weights), 1)
 			self.scales = sqrt(sum(multiply(square(data - self.means.reshape(-1, 1)), weights), 1))
-
-			# regularize priors
-			if self.alpha is not None:
-				self.priors = self.priors + self.alpha
-				self.priors = self.priors / sum(self.priors)
 
 			# check for convergence
 			value_ = self.evaluate(data)

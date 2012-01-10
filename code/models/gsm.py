@@ -60,11 +60,13 @@ class GSM(Distribution):
 		if Distribution.VERBOSITY > 2:
 			print 0, value
 
+		# compute squared norms of data points
+		sqnorms = sum(square(data), 0).reshape(1, -1)
+
 		for i in range(max_iter):
 			scales = self.scales.reshape(-1, 1)
 
 			# calculate posterior over scales (E)
-			sqnorms = sum(square(data), 0).reshape(1, -1)
 			post = -0.5 * sqnorms / square(scales) - self.dim * log(scales)
 			post = exp(post - logsumexp(post, 0))
 
