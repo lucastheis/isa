@@ -10,7 +10,7 @@ sys.path.append('./code')
 
 from numpy import *
 from numpy.random import randn
-from models import ISA, MoGaussian, ConcatModel, Distribution
+from models import ISA, MoGaussian, StackedModel, ConcatModel, Distribution
 from transforms import LinearTransform, WhiteningTransform
 from tools import preprocess, Experiment, mapp
 
@@ -93,36 +93,35 @@ def main(argv):
 	dct = LinearTransform(dim=int(sqrt(data.shape[0])), basis='DCT')
 	data = dct(data)
 
-	# whiten data
-	wt = WhiteningTransform(data, symmetric=True)
-	data = wt(data)
+	# whitening transform
+	wt = WhiteningTransform(data[1:], symmetric=True)
 
 
+	
+	# initialize ISA model with Laplace marginals
+	isa = ISA(data.shape[0] - 1, (data.shape[0] - 1) * overcompleteness, ssize=ssize)
+	isa.initialize(method='laplace')
 
 	# model DC component separately
-	model = ConcatModel(
-		MoGaussian(10), 
-		ISA(data.shape[0] - 1, (data.shape[0] - 1) * overcompleteness, ssize=ssize))
+	model = ConcatModel(MoGaussian(10), StackedModel(wt, isa))
 
 	# train mixture model on DC component
-	model[0].train(data[:1], max_iter=100)
+	model.train(data, 0, max_iter=100)
 
 	# initialize, train and finetune ISA model
-	model[1].initialize(method='laplace')
-
-	model[1].train(data[1:, :20000], 
+	model.train(data[:, :20000], 1,
 		max_iter=20, 
 		train_prior=False,
-		method=('sgd', {'max_iter': 1}), 
+		method='sgd', 
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 
-	model[1].train(data[1:, :20000], 
+	model.train(data[:, :20000], 1,
 		max_iter=max_iter, 
 		train_prior=True,
-		method=('sgd', {'max_iter': 1}), 
+		method='sgd', 
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 
-	model[1].train(data[1:, :num_data],
+	model.train(data[:, :num_data], 1,
 		max_iter=10,
 		train_prior=True,
 		method='lbfgs', 

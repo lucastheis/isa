@@ -6,7 +6,7 @@ import sys
 
 sys.path.append('./code')
 
-from models import ConcatModel, GSM, MoGaussian, Distribution
+from models import ConcatModel, StackedModel, GSM, MoGaussian, Distribution
 from transforms import LinearTransform, WhiteningTransform
 from tools import preprocess, Experiment
 from numpy import load, sqrt
@@ -40,14 +40,13 @@ def main(argv):
 	dct = LinearTransform(dim=int(sqrt(data.shape[0])), basis='DCT')
 	data = dct(data)
 
-	# whiten data
-	wt = WhiteningTransform(data, symmetric=True)
-	data = wt(data)
+	# whitening transform
+	wt = WhiteningTransform(data[1:], symmetric=True)
 
 	# model DC component separately
 	model = ConcatModel(
 		MoGaussian(num_components), 
-		GSM(data.shape[0] - 1, num_scales))
+		StackedModel(wt, GSM(data.shape[0] - 1, num_scales)))
 
 	# train mixture distribution on DC component
 	model.train(data, 0, max_iter=100)
@@ -61,12 +60,14 @@ def main(argv):
 
 	data = load('data/vanhateren.{0}.0.npz'.format(patch_size))['data']
 	data = preprocess(data, noise_level=noise_level)
-	data = wt(dct(data))
+
+	data = dct(data)
 
 	logloss = model.evaluate(data)
+	print '{0:.4f} [bit/pixel]'.format(logloss)
 
+	logloss = model[1].model.evaluate(wt(data[1:]))
 	print '{0:.4f} [bit/pixel] (white)'.format(logloss)
-	print '{0:.4f} [bit/pixel]'.format(logloss + wt.logjacobian() / data.shape[0])
 
 	experiment['parameters'] = parameters[int(argv[1])]
 	experiment['transforms'] = [dct, wt]
