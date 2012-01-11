@@ -5,8 +5,10 @@ __docformat__ = 'epytext'
 from scipy.special import erf, erfinv
 from scipy.stats import norm
 from scipy.optimize import bisect
-from numpy import mean, sqrt, asarray
+from numpy import mean, sqrt, asarray, max, min, any
 from transforms import Transform
+
+import pdb
 
 class UnivariateGaussianization(Transform):
 	def __init__(self, mog):
@@ -22,7 +24,11 @@ class UnivariateGaussianization(Transform):
 		data = self.mog.cdf(data)
 
 		# apply inverse Gaussian CDF
-		return erfinv(data * 2. - 1.) * sqrt(2.)
+		result = erfinv(data * 2. - 1.)
+		result[result > 6.] = 6.
+		result[result < -6.] = -6.
+
+		return result * sqrt(2.)
 
 
 
@@ -59,4 +65,5 @@ class UnivariateGaussianization(Transform):
 	def logjacobian(self, data):
 		# make sure data has right shape
 		data = asarray(data).reshape(1, -1)
-		return self.mog.loglikelihood(data) - norm.logpdf(self.apply(data))
+		data_ug = self.apply(data)
+		return self.mog.loglikelihood(data) - norm.logpdf(data_ug)
