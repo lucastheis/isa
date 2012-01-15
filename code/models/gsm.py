@@ -174,7 +174,7 @@ class GSM(Distribution):
 		uloglik = -0.5 * sqnorms / square(scales) - self.dim * log(scales)
 
 		# average over scales
-		return -logmeanexp(uloglik, 0)
+		return -logmeanexp(uloglik, 0).reshape(1, -1)
 
 
 
