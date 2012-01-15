@@ -22,7 +22,7 @@ class StackedModel(Distribution):
 	
 
 	def sample(self, num_samples):
-		samples = self.model(num_samples)
+		samples = self.model.sample(num_samples)
 
 		for transform in reversed(self.transforms):
 			samples = transform.inverse(samples)
