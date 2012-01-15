@@ -10,8 +10,8 @@ sys.path.append('./code')
 
 from numpy import *
 from numpy.random import randn
-from models import ISA, MoGaussian, StackedModel, ConcatModel, Distribution
-from transforms import LinearTransform, WhiteningTransform
+from models import ISA, MoGaussian, StackedModel, ConcatModel, Distribution, GSM
+from transforms import LinearTransform, WhiteningTransform, RadialGaussianization
 from tools import preprocess, Experiment, mapp
 
 mapp.max_processes = 12
@@ -20,36 +20,37 @@ Distribution.VERBOSITY = 2
 from numpy import round, sqrt
 from numpy.linalg import svd
 
-# PS, SS, OC, ND, MI, NS, MC
+# PS, SS, OC, ND, MI, NS, MC, RG
 parameters = [
-	['8x8',     1, 1, 100, 40, 32, 0],
-	['10x10',   1, 1, 100, 40, 32, 0],
-	['12x12',   1, 1, 100, 40, 32, 0],
-	['14x14',   1, 1, 100, 40, 32, 0],
-	['16x16',   1, 1, 100, 40, 32, 0],
-	['8x8',     2, 1, 100, 40, 32, 0],
-	['16x16',   2, 1, 100, 40, 32, 0],
-	['8x8',     4, 1, 100, 40, 32, 0],
-	['16x16',   4, 1, 100, 40, 32, 0],
-	['8x8',    32, 1, 100, 40, 32, 0],
-	['16x16',  32, 1, 100, 40, 32, 0],
-	['16x16', 128, 1, 100, 40, 32, 0],
-	['8x8',     1, 2, 100, 80, 32, 10],
-	['8x8',     2, 2, 100, 80, 32, 10],
-	['8x8',     4, 2, 100, 80, 32, 10],
-	['8x8',     1, 2, 100, 80, 32, 20],
-	['8x8',     2, 2, 100, 80, 32, 20],
-	['8x8',     4, 2, 100, 80, 32, 20],
+	['8x8',     1, 1, 100, 40, 32, 0, False],
+	['10x10',   1, 1, 100, 40, 32, 0, False],
+	['12x12',   1, 1, 100, 40, 32, 0, False],
+	['14x14',   1, 1, 100, 40, 32, 0, False],
+	['16x16',   1, 1, 100, 40, 32, 0, False],
+	['8x8',     2, 1, 100, 40, 32, 0, False],
+	['16x16',   2, 1, 100, 40, 32, 0, False],
+	['8x8',     4, 1, 100, 40, 32, 0, False],
+	['16x16',   4, 1, 100, 40, 32, 0, False],
+	['8x8',    32, 1, 100, 40, 32, 0, False],
+	['16x16',  32, 1, 100, 40, 32, 0, False],
+	['16x16', 128, 1, 100, 40, 32, 0, False],
+	['8x8',     1, 2, 100, 80, 32, 10, False],
+	['8x8',     2, 2, 100, 80, 32, 10, False],
+	['8x8',     4, 2, 100, 80, 32, 10, False],
+	['8x8',     1, 2, 100, 80, 32, 20, False],
+	['8x8',     2, 2, 100, 80, 32, 20, False],
+	['8x8',     4, 2, 100, 80, 32, 20, False],
+	['8x8',     1, 2, 100, 80, 32, 20, True],
 ]
 
 def main(argv):
 	if len(argv) < 2:
 		print 'Usage:', argv[0], '<params_id>'
 		print
-		print '  {0:>3} {1:>5} {2:>3} {3:>4} {4:>5} {5:>4} {6:>5} {7:>3}'.format('ID', 'PS', 'SS', 'OC', 'ND', 'MI', 'NS', 'MC')
+		print '  {0:>3} {1:>5} {2:>3} {3:>4} {4:>5} {5:>4} {6:>5} {7:>3} {8:>5}'.format('ID', 'PS', 'SS', 'OC', 'ND', 'MI', 'NS', 'MC', 'RG')
 
 		for id, params in enumerate(parameters):
-			print '  {0:>3} {1:>5} {2:>3} {3:>3}x {4:>4}k {5:>4} {6:>5} {7:>3}'.format(id, *params)
+			print '  {0:>3} {1:>5} {2:>3} {3:>3}x {4:>4}k {5:>4} {6:>5} {7:>3} {8:>5}'.format(id, *params)
 
 		print
 		print '  ID = parameter set'
@@ -60,6 +61,7 @@ def main(argv):
 		print '  MI = maximum number of training epochs'
 		print '  NS = inverse noise level'
 		print '  MC = number of Gibbs sampling steps'
+		print '  RG = radially Gaussianize first'
 
 		return 0
 
@@ -79,7 +81,8 @@ def main(argv):
 	num_data, \
 	max_iter, \
 	noise_level, \
-	num_steps = parameters[int(argv[1])]
+	num_steps, \
+	radially_gaussianize = parameters[int(argv[1])]
 	num_data = num_data * 1000
 
 
@@ -97,13 +100,24 @@ def main(argv):
 	wt = WhiteningTransform(data[1:], symmetric=True)
 
 
+
+
+
 	
 	# initialize ISA model with Laplace marginals
 	isa = ISA(data.shape[0] - 1, (data.shape[0] - 1) * overcompleteness, ssize=ssize)
 	isa.initialize(method='laplace')
 
-	# model DC component separately
-	model = ConcatModel(MoGaussian(10), StackedModel(wt, isa))
+	if radially_gaussianize:
+		gsm = GSM(data.shape[0] - 1, 10)
+		gsm.train(wt(data[1:]), max_iter=100)
+
+		rg = RadialGaussianization(gsm)
+
+		model = ConcatModel(MoGaussian(10), StackedModel(wt, rg, isa))
+	else:
+		# model DC component separately with mixture of Gaussians
+		model = ConcatModel(MoGaussian(10), StackedModel(wt, isa))
 
 	# train mixture model on DC component
 	model.train(data, 0, max_iter=100)

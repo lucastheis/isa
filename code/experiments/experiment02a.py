@@ -7,7 +7,8 @@ import sys
 sys.path.append('./code')
 
 from numpy import *
-from models import ISA, ICA, Distribution
+from models import ConcatModel, StackedModel, Distribution, ISA, ICA
+from transforms import LinearTransform, WhiteningTransform
 from transforms import SubspaceGaussianization, MarginalGaussianization
 from tools import Experiment, preprocess, mapp
 
@@ -16,23 +17,25 @@ Distribution.VERBOSITY = 1
 # number of processors used
 mapp.max_processes = 8
 
-# PS, SS, ND, MI, NS, ML, LS
+# PS, SS, ND, MI, NS, ML, LS, RG
 parameters = [
-	['8x8',   1, 100, 40, 32, 50, False],
-	['16x16', 1, 100, 80, 32, 50, False],
-	['8x8',   2, 100, 40, 32, 50, False],
-	['16x16', 2, 100, 80, 32, 50, False],
-	['8x8',   1, 100, 40, 32, 50, True],
+	['8x8',   1, 100, 40, 32, 50, False, False],
+	['16x16', 1, 100, 80, 32, 50, False, False],
+	['8x8',   2, 100, 40, 32, 50, False, False],
+	['16x16', 2, 100, 80, 32, 50, False, False],
+	['8x8',   1, 100, 40, 32, 50, True,  False],
+	['8x8',   1, 100, 40, 32, 50, False, True],
 ]
 
 def main(argv):
 	if len(argv) < 2:
 		print 'Usage:', argv[0], '<params_id>'
 		print
-		print '  {0:>3} {1:>5} {2:>3} {3:>5} {4:>4} {5:>5} {6:>3} {7:>5}'.format('ID', 'PS', 'SS', 'ND', 'MI', 'NS', 'ML', 'LS')
+		print '  {0:>3} {1:>5} {2:>3} {3:>5} {4:>4} {5:>5} {6:>3} {7:>5} {8:>5}'.format(
+			'ID', 'PS', 'SS', 'ND', 'MI', 'NS', 'ML', 'LS', 'RG')
 
 		for id, params in enumerate(parameters):
-			print '  {0:>3} {1:>5} {2:>3} {3:>4}k {4:>4} {5:>5} {6:>3} {7:>5}'.format(id, *params)
+			print '  {0:>3} {1:>5} {2:>3} {3:>4}k {4:>4} {5:>5} {6:>3} {7:>5} {8:>5}'.format(id, *params)
 
 		print
 		print '  ID = parameter set'
@@ -43,24 +46,32 @@ def main(argv):
 		print '  NS = inverse noise level'
 		print '  ML = maximum number of layers'
 		print '  LS = learn subspace sizes'
+		print '  RG = radially Gaussianize first'
 
 		return 0
 
 	seterr(invalid='raise', over='raise', divide='raise')
 
 	# hyperparameters
-	patch_size, ssize, num_data, max_iter, noise_level, max_layers, train_subspaces = parameters[int(argv[1])]
-	num_data *= 1000
+	patch_size, \
+	ssize, \
+	num_data, \
+	max_iter, \
+	noise_level, \
+	max_layers, \
+	train_subspaces, \
+	radially_gaussianize = parameters[int(argv[1])]
+	num_data = num_data * 1000
 
 	# start experiment
 	experiment = Experiment()
 
-	# load natural image patches
-	data = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
+	# load data, log-transform and center data
+	data = load('data/vanhateren.{0}.preprocessed.npz'.format(patch_size))
 
-	# log-transform data, whiten data, and add some noise
-	data, whitening_matrix = preprocess(data, return_whitening_matrix=True, noise_level=noise_level)
-
+	data_train = data['data_train']
+	data_test = data['data_test']
+	
 	# container for hierarchical model
 	model = []
 
@@ -68,21 +79,42 @@ def main(argv):
 	logjacobian = 0.
 
 	experiment['parameters'] = parameters[int(argv[1])]
-	experiment['whitening_matrix'] = whitening_matrix
 	experiment['model'] = model
 
-	for _ in range(max_layers - 1):
-		if ssize > 1 or train_subspaces:
-			model.append(ISA(data.shape[0], data.shape[0], ssize=ssize))
-		else:
-			model.append(ICA(data.shape[0]))
+	if radially_gaussianize:
+		model.append(GSM(data_train.shape[0], 10))
+		model[-1].train(data_train, max_iter=100)
+
+		# evaluate GSM
+		loglik_train = mean(model[-1].loglikelihood(data_train[:, :num_data]))
+		loglik_test = mean(model[-1].loglikelihood(data_test[:, :num_data]))
+
+		print
+		print '{0:>2}, {1} [bit/pixel] (train)'.format(len(model), -loglik_train / data_train.shape[0] / log(2.))
+		print '{0:>2}, {1} [bit/pixel] (test)'.format(len(model), -loglik_test / data_train.shape[0] / log(2.))
+		print
+
+		# perform radial Gaussianization
+		rg = RadialGaussianization(model[-1])
+
+		logjacobian += mean(rg.logjacobian(data_test[:, :num_data]))
+
+		data_train = rg(data_train[:, :num_data])
+		data_test = rg(data_test[:, :num_data])
+
+	for _ in range(max_layers):
+		model.append(ISA(data_train.shape[0], data_train.shape[0], ssize=ssize))
 		
 		# initialize, train and finetune model
-		model[-1].train(data[:, :20000], max_iter=20, method=('sgd', {'max_iter': 1}),
+		model[-1].initialize(method='laplace')
+
+		model[-1].train(data_train[:, :20000], max_iter=20, method=('sgd', {'max_iter': 1}),
 				train_prior=False, train_subspaces=False)
-		model[-1].train(data[:, :20000], max_iter=max_iter, method=('sgd', {'max_iter': 1}),
+
+		model[-1].train(data_train[:, :20000], max_iter=max_iter, method=('sgd', {'max_iter': 1}),
 				train_prior=True, train_subspaces=train_subspaces)
-		model[-1].train(data[:, :num_data], max_iter=10, method='lbfgs',
+
+		model[-1].train(data_train[:, :num_data], max_iter=10, method='lbfgs',
 				train_prior=True, train_subspaces=train_subspaces)
 
 		# save model
@@ -90,36 +122,21 @@ def main(argv):
 		experiment.save('results/experiment02a/experiment02a.{0}.{1}.xpck')
 
 		# evaluate hierarchical model on training data
-		loglik = mean(model[-1].loglikelihood(data[:, :num_data])) + logjacobian
+		loglik_train = mean(model[-1].loglikelihood(data_train[:, :num_data])) + logjacobian
+		loglik_test = mean(model[-1].loglikelihood(data_test[:, :num_data])) + logjacobian
+
 		print
-		print '{0:>2}, {1} [bit/pixel]'.format(len(model), -loglik / data.shape[0] / log(2.))
+		print '{0:>2}, {1} [bit/pixel] (train)'.format(len(model), -loglik_train / data_train.shape[0] / log(2.))
+		print '{0:>2}, {1} [bit/pixel] (test)'.format(len(model), -loglik_test / data_train.shape[0] / log(2.))
 		print
 
-		# subspace Gaussianization transform
-		if ssize > 1 or train_subspaces:
-			sg = SubspaceGaussianization(model[-1])
-		else:
-			sg = MarginalGaussianization(model[-1])
-		logjacobian += mean(sg.logjacobian(data[:, :num_data]))
-		data = sg(data[:, :num_data])
+		# perform subspace Gaussianization on data and update Jacobian
+		sg = SubspaceGaussianization(model[-1])
 
-	# top layer
-	if ssize > 1 or train_subspaces:
-		model.append(ISA(data.shape[0], data.shape[0], ssize=ssize))
-	else:
-		model.append(ICA(data.shape[0]))
-	
-	# train and finetune model
-	model[-1].train(data[:, :20000], max_iter=max_iter, method=('sgd', {'max_iter': 1}))
-	model[-1].train(data[:, :num_data], max_iter=10, method='lbfgs')
+		logjacobian += mean(sg.logjacobian(data_test[:, :num_data]))
 
-	# save model
-	experiment['num_layers'] = max_layers
-	experiment.save('results/experiment02a/experiment02a.{0}.{1}.xpck')
-
-	# evaluate hierarchical model on training data
-	loglik = mean(model.loglikelihood(data[:, :num_data])) + logjacobian
-	print '{0} [bit/pixel]'.format(loglik / data.shape[0] / log(2.))
+		data_train = sg(data_train[:, :num_data])
+		data_test = sg(data_test[:, :num_data])
 
 	return 0
 

@@ -13,7 +13,10 @@ from numpy import load, sqrt
 
 parameters = [
 	['8x8',   10, 10, 32],
-	['16x16', 10, 10, 32]
+	['16x16', 10, 10, 32],
+	['8x8',   10, 1, 32],
+	['16x16', 10, 1, 32],
+	['40x40', 10, 1, 32]
 	]
 
 Distribution.VERBOSITY = 3

@@ -13,7 +13,7 @@ import sys
 sys.path.append('./code')
 
 from transforms import LinearTransform, WhiteningTransform
-from numpy import load, sqrt, savez
+from numpy import load, sqrt, savez, cov
 from tools import preprocess
 
 def main(argv):
@@ -29,7 +29,7 @@ def main(argv):
 
 	# transforms
 	dct = LinearTransform(dim=int(sqrt(data_train.shape[0])), basis='DCT')
-	wt = WhiteningTransform(data_train[1:], symmetric=True)
+	wt = WhiteningTransform(dct(data_train)[1:], symmetric=True)
 
 	# further preprocess data
 	data_train = wt(dct(data_train)[1:])
