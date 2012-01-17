@@ -10,7 +10,7 @@ class StackedModel(Distribution):
 
 
 	def __getitem__(self, key):
-		return (self.transforms + [self.model])[key]
+		return (list(self.transforms) + [self.model])[key]
 
 
 

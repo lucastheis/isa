@@ -38,9 +38,6 @@ class ISA(Distribution):
 		if num_hiddens is None:
 			num_hiddens = num_visibles
 
-		if mod(num_hiddens, ssize):
-			raise ValueError('num_hiddens must be a multiple of ssize.')
-
 		self.dim = num_visibles
 		self.num_visibles = num_visibles
 		self.num_hiddens = num_hiddens
@@ -51,6 +48,9 @@ class ISA(Distribution):
 		# subspace densities
 		self.subspaces = [
 			GSM(ssize) for _ in range(num_hiddens / ssize)]
+
+		if mod(num_hiddens, ssize) > 0:
+			self.subspaces.append(GSM(mod(num_hiddens, ssize)))
 
 		# initialize subspace distributions
 		for model in self.subspaces:
@@ -141,6 +141,7 @@ class ISA(Distribution):
 		adaptive = kwargs.get('adaptive', True) 
 		train_prior = kwargs.get('train_prior', True)
 		train_subspaces = kwargs.get('train_subspaces', False)
+		persistent = kwargs.get('persistent', False)
 
 		if Distribution.VERBOSITY > 0:
 			if self.num_hiddens > self.num_visibles:
@@ -172,8 +173,9 @@ class ISA(Distribution):
 			if train_prior or train_subspaces:
 				self.normalize_prior()
 
-			# initializes sampling procedure in next iteration
-			sampling_method[1]['Y'] = Y
+			if persistent:
+				# initializes samples in next iteration
+				sampling_method[1]['Y'] = Y
 
 			# optimize linear features (M)
 			if method[0].lower() == 'sgd':
