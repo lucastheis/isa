@@ -12,7 +12,7 @@ from numpy import min, max, round
 from numpy.random import randint, randn, rand, logseries, permutation
 from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
-from scipy.optimize import fmin_l_bfgs_b, check_grad
+from scipy.optimize import fmin_l_bfgs_b
 from scipy.stats import laplace, t
 from tools import gaborf, mapp, logmeanexp, asshmarray
 from gsm import GSM
@@ -616,7 +616,7 @@ class ISA(Distribution):
 
 		# initial hidden state
 		Y = WX + dot(Q, Y) if Y is not None else \
-			WX + dot(Q, self.sample_prior(X.shape[1]))
+			WX + dot(Q, self.sample_prior(X.shape[1])) # TODO: replace with mean-field approximation
 
 		# Gibbs sample between S and Y given X
 		for step in range(num_steps):
@@ -689,7 +689,7 @@ class ISA(Distribution):
 
 	def _sample_posterior_cond(self, Y, X, S, W, WX, Q):
 		"""
-		Samples posterior conditioned on scales. Ugly, but efficient.
+		Samples posterior conditioned on scales.
 
 		B{References:}
 			- Doucet, A. (2010). I{A Note on Efficient Conditional Simulation of
