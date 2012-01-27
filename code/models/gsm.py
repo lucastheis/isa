@@ -137,7 +137,7 @@ class GSM(Distribution):
 		for j in range(self.num_scales - 1):
 			indices[uni > cmf[j]] = j + 1
 
-		return self.scales[indices]
+		return self.scales[indices].reshape(1, -1)
 
 
 

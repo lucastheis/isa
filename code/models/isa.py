@@ -141,7 +141,7 @@ class ISA(Distribution):
 		adaptive = kwargs.get('adaptive', True) 
 		train_prior = kwargs.get('train_prior', True)
 		train_subspaces = kwargs.get('train_subspaces', False)
-		persistent = kwargs.get('persistent', False)
+		persistent = kwargs.get('persistent', True)
 
 		if Distribution.VERBOSITY > 0:
 			if self.num_hiddens > self.num_visibles:
@@ -543,7 +543,7 @@ class ISA(Distribution):
 		scales = []
 
 		for model in self.subspaces:
-			# repeat sampled scales for all dimensions
+			# repeat sampled scales for all subspace dimensions
 			scales.extend(
 				tile(model.sample_posterior(Y[:model.dim]), [model.dim, 1]))
 			Y = Y[model.dim:]

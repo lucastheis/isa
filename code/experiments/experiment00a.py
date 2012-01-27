@@ -37,7 +37,9 @@ def main(argv):
 
 	savez('data/vanhateren.' + patch_size + '.preprocessed.npz',
 		data_train=data_train,
-		data_test=data_test)
+		data_test=data_test,
+		dct=dct.A,
+		wt=wt.A)
 
 	return 0
 
