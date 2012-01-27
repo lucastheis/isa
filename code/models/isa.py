@@ -587,6 +587,9 @@ class ISA(Distribution):
 		elif method[0].lower() == 'ais':
 			return self.sample_posterior_ais(X, **method[1])[0]
 
+		elif method[0].lower() == 'tempered':
+			return self.sample_posterior_tempered(X, **method[1])[0]
+
 		else:
 			raise ValueError('Unknown sampling method \'{0}\'.'.format(method))
 
@@ -595,6 +598,11 @@ class ISA(Distribution):
 	def sample_nullspace(self, X, method=('gibbs', {})):
 		"""
 		Draws a sample from the posterior over the linear model's null space.
+
+		B{References:}
+			- Chen, R. and Wu, Y. (2002). I{Null-Space Representation for Overcomplete Independent Component
+			  Analysis}
+
 		"""
 
 		# nullspace basis
@@ -686,7 +694,64 @@ class ISA(Distribution):
 		log_is_weights += self.prior_loglikelihood(Y)
 
 		return Y, log_is_weights
-			
+
+
+
+	def sample_posterior_tempered(self, X, num_steps=10, annealing_weights=[], Y=None):
+		"""
+		Sample posterior distribution over hidden states using tempered transitions.
+		This method might give better results if the marginals are very kurtotic and
+		the posterior therefore highly multimodal.
+
+		B{References:}
+			- Neal, R. (1994). Sampling from Multimodal Distributions Using Tempered
+			Transitions.
+		"""
+
+		if not annealing_weights:
+			annealing_weights = linspace(0, 1, num_steps + 1)[1:]
+
+		# initialize proposal distribution to Gaussian
+		model = deepcopy(self)
+		for gsm in model.subspaces:
+			gsm.scales[:] = 1.
+
+		# filter matrix and filter responses
+		W = pinv(self.A)
+		WX = dot(W, X)
+
+		# nullspace basis and projection matrix
+		B = self.nullspace_basis()
+		Q = dot(B.T, B)
+
+		# initial hidden state
+		Y = WX + dot(Q, Y) if Y is not None else \
+			WX + dot(Q, self.sample_prior(X.shape[1]))
+
+		# initialize importance weights
+		log_is_weights = zeros([1, X.shape[1]])
+
+		for step, beta in enumerate(annealing_weights):
+			# tune proposal distribution
+			for i in range(len(self.subspaces)):
+				# adjust standard deviations
+				model.subspaces[i].scales = (1. - beta) + beta * self.subspaces[i].scales
+
+			log_is_weights -= model.prior_energy(Y)
+
+			# apply Gibbs sampling transition operator
+			S = model.sample_scales(Y)
+			Y = model._sample_posterior_cond(Y, X, S, W, WX, Q)
+
+			log_is_weights += model.prior_energy(Y)
+
+			if Distribution.VERBOSITY > 1:
+				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.prior_energy(Y)))
+
+		log_is_weights += self.prior_loglikelihood(Y)
+
+		return Y, log_is_weights
+
 
 
 	def _sample_posterior_cond(self, Y, X, S, W, WX, Q):
