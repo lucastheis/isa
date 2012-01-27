@@ -38,9 +38,6 @@ class ISA(Distribution):
 		if num_hiddens is None:
 			num_hiddens = num_visibles
 
-		if mod(num_hiddens, ssize):
-			raise ValueError('num_hiddens must be a multiple of ssize.')
-
 		self.dim = num_visibles
 		self.num_visibles = num_visibles
 		self.num_hiddens = num_hiddens
@@ -51,6 +48,9 @@ class ISA(Distribution):
 		# subspace densities
 		self.subspaces = [
 			GSM(ssize) for _ in range(num_hiddens / ssize)]
+
+		if mod(num_hiddens, ssize) > 0:
+			self.subspaces.append(GSM(mod(num_hiddens, ssize)))
 
 		# initialize subspace distributions
 		for model in self.subspaces:
@@ -141,6 +141,7 @@ class ISA(Distribution):
 		adaptive = kwargs.get('adaptive', True) 
 		train_prior = kwargs.get('train_prior', True)
 		train_subspaces = kwargs.get('train_subspaces', False)
+		persistent = kwargs.get('persistent', True)
 
 		if Distribution.VERBOSITY > 0:
 			if self.num_hiddens > self.num_visibles:
@@ -172,8 +173,9 @@ class ISA(Distribution):
 			if train_prior or train_subspaces:
 				self.normalize_prior()
 
-			# initializes sampling procedure in next iteration
-			sampling_method[1]['Y'] = Y
+			if persistent:
+				# initializes samples in next iteration
+				sampling_method[1]['Y'] = Y
 
 			# optimize linear features (M)
 			if method[0].lower() == 'sgd':
@@ -541,7 +543,7 @@ class ISA(Distribution):
 		scales = []
 
 		for model in self.subspaces:
-			# repeat sampled scales for all dimensions
+			# repeat sampled scales for all subspace dimensions
 			scales.extend(
 				tile(model.sample_posterior(Y[:model.dim]), [model.dim, 1]))
 			Y = Y[model.dim:]
@@ -585,6 +587,9 @@ class ISA(Distribution):
 		elif method[0].lower() == 'ais':
 			return self.sample_posterior_ais(X, **method[1])[0]
 
+		elif method[0].lower() == 'tempered':
+			return self.sample_posterior_tempered(X, **method[1])[0]
+
 		else:
 			raise ValueError('Unknown sampling method \'{0}\'.'.format(method))
 
@@ -593,6 +598,11 @@ class ISA(Distribution):
 	def sample_nullspace(self, X, method=('gibbs', {})):
 		"""
 		Draws a sample from the posterior over the linear model's null space.
+
+		B{References:}
+			- Chen, R. and Wu, Y. (2002). I{Null-Space Representation for Overcomplete Independent Component
+			  Analysis}
+
 		"""
 
 		# nullspace basis
@@ -684,7 +694,64 @@ class ISA(Distribution):
 		log_is_weights += self.prior_loglikelihood(Y)
 
 		return Y, log_is_weights
-			
+
+
+
+	def sample_posterior_tempered(self, X, num_steps=10, annealing_weights=[], Y=None):
+		"""
+		Sample posterior distribution over hidden states using tempered transitions.
+		This method might give better results if the marginals are very kurtotic and
+		the posterior therefore highly multimodal.
+
+		B{References:}
+			- Neal, R. (1994). Sampling from Multimodal Distributions Using Tempered
+			Transitions.
+		"""
+
+		if not annealing_weights:
+			annealing_weights = linspace(0, 1, num_steps + 1)[1:]
+
+		# initialize proposal distribution to Gaussian
+		model = deepcopy(self)
+		for gsm in model.subspaces:
+			gsm.scales[:] = 1.
+
+		# filter matrix and filter responses
+		W = pinv(self.A)
+		WX = dot(W, X)
+
+		# nullspace basis and projection matrix
+		B = self.nullspace_basis()
+		Q = dot(B.T, B)
+
+		# initial hidden state
+		Y = WX + dot(Q, Y) if Y is not None else \
+			WX + dot(Q, self.sample_prior(X.shape[1]))
+
+		# initialize importance weights
+		log_is_weights = zeros([1, X.shape[1]])
+
+		for step, beta in enumerate(annealing_weights):
+			# tune proposal distribution
+			for i in range(len(self.subspaces)):
+				# adjust standard deviations
+				model.subspaces[i].scales = (1. - beta) + beta * self.subspaces[i].scales
+
+			log_is_weights -= model.prior_energy(Y)
+
+			# apply Gibbs sampling transition operator
+			S = model.sample_scales(Y)
+			Y = model._sample_posterior_cond(Y, X, S, W, WX, Q)
+
+			log_is_weights += model.prior_energy(Y)
+
+			if Distribution.VERBOSITY > 1:
+				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.prior_energy(Y)))
+
+		log_is_weights += self.prior_loglikelihood(Y)
+
+		return Y, log_is_weights
+
 
 
 	def _sample_posterior_cond(self, Y, X, S, W, WX, Q):

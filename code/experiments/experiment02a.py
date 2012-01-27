@@ -24,6 +24,7 @@ parameters = [
 	['8x8',   2, 100, 40, 32, 50, False, False],
 	['16x16', 2, 100, 80, 32, 50, False, False],
 	['8x8',   1, 100, 40, 32, 50, True,  False],
+	['16x16', 1, 100, 40, 32, 50, True,  False],
 	['8x8',   1, 100, 40, 32, 50, False, True],
 ]
 

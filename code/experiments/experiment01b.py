@@ -9,6 +9,7 @@ sys.path.append('./code')
 
 from getopt import getopt
 from tools import Experiment
+from models import ConcatModel
 from numpy import *
 
 filepath = './results/experiment01a/'
@@ -28,11 +29,16 @@ def main(argv):
 		if filename.endswith('.xpck'):
 			results = Experiment(os.path.join(filepath, filename))
 
+			if isinstance(results['model'], ConcatModel):
+				model = results['model'][1].model
+			else:
+				model = results['model']
+
 			if '-o' in opts:
-				if results['model'].num_hiddens / results['model'].num_visibles != int(opts['-o']):
+				if model.num_hiddens / model.num_visibles != int(opts['-o']):
 					continue
 			if '-s' in opts:
-				if any([gsm.dim != int(opts['-s']) for gsm in results['model'].subspaces]):
+				if any([gsm.dim != int(opts['-s']) for gsm in model.subspaces]):
 					continue
 			if '-p' in opts:
 				if opts['-p'] not in results['parameters']:
