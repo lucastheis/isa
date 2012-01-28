@@ -5,7 +5,7 @@ Tool for creating contour plots from samples.
 __license__ = 'MIT License <http://www.opensource.org/licenses/mit-license.php>'
 __author__ = 'Lucas Theis <lucas@tuebingen.mpg.de>'
 __docformat__ = 'epytext'
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 
 from numpy import histogram2d, cov, sqrt, sum, multiply, dot
 from numpy.linalg import inv
@@ -42,5 +42,5 @@ def contours(data, bins=20, levels=10, threshold=3., **kwargs):
 	Y = (Y[1:] + Y[:-1]) / 2.
 
 	# contour plot of histogram
-	contour(X, Y, Z, levels, **kwargs)
+	contour(X, Y, Z.T, levels, **kwargs)
 	draw()

@@ -107,7 +107,7 @@ class ISA(Distribution):
 			# fit mixture of Gaussian to multivariate Laplace
 			samples = randn(self.subspaces[0].dim, 10000)
 			samples = samples / sqrt(sum(square(samples), 0))
-			samples = t.rvs(2, size=[1, 10000]) * samples
+			samples = t.rvs(2., size=[1, 10000]) * samples
 
 			gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
 			gsm.train(samples, max_iter=100)
@@ -588,7 +588,7 @@ class ISA(Distribution):
 			return self.sample_posterior_ais(X, **method[1])[0]
 
 		elif method[0].lower() == 'tempered':
-			return self.sample_posterior_tempered(X, **method[1])[0]
+			return self.sample_posterior_tempered(X, **method[1])
 
 		else:
 			raise ValueError('Unknown sampling method \'{0}\'.'.format(method))
@@ -697,7 +697,7 @@ class ISA(Distribution):
 
 
 
-	def sample_posterior_tempered(self, X, num_steps=10, annealing_weights=[], Y=None):
+	def sample_posterior_tempered(self, X, num_steps=1, annealing_weights=[], Y=None):
 		"""
 		Sample posterior distribution over hidden states using tempered transitions.
 		This method might give better results if the marginals are very kurtotic and
@@ -708,13 +708,11 @@ class ISA(Distribution):
 			Transitions.
 		"""
 
-		if not annealing_weights:
+		if annealing_weights in ([], None):
 			annealing_weights = linspace(0, 1, num_steps + 1)[1:]
 
-		# initialize proposal distribution to Gaussian
+		# initialize distribution
 		model = deepcopy(self)
-		for gsm in model.subspaces:
-			gsm.scales[:] = 1.
 
 		# filter matrix and filter responses
 		W = pinv(self.A)
@@ -728,29 +726,58 @@ class ISA(Distribution):
 		Y = WX + dot(Q, Y) if Y is not None else \
 			WX + dot(Q, self.sample_prior(X.shape[1]))
 
-		# initialize importance weights
-		log_is_weights = zeros([1, X.shape[1]])
+		for _ in range(num_steps):
+			Y_old = copy(Y)
 
-		for step, beta in enumerate(annealing_weights):
-			# tune proposal distribution
-			for i in range(len(self.subspaces)):
-				# adjust standard deviations
-				model.subspaces[i].scales = (1. - beta) + beta * self.subspaces[i].scales
+			# initialize importance weights
+			log_is_weights = self.prior_energy(Y)
 
-			log_is_weights -= model.prior_energy(Y)
+			# increase temperature
+			for step, beta in enumerate(annealing_weights[::-1]):
+				# tune proposal distribution
+				for i in range(len(self.subspaces)):
+					# adjust standard deviations
+					model.subspaces[i].scales = (1. - beta) + beta * self.subspaces[i].scales
 
-			# apply Gibbs sampling transition operator
-			S = model.sample_scales(Y)
-			Y = model._sample_posterior_cond(Y, X, S, W, WX, Q)
+				log_is_weights -= model.prior_energy(Y)
 
-			log_is_weights += model.prior_energy(Y)
+				# apply Gibbs sampling transition operator
+				S = model.sample_scales(Y)
+				Y = model._sample_posterior_cond(Y, X, S, W, WX, Q)
 
-			if Distribution.VERBOSITY > 1:
-				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.prior_energy(Y)))
+				log_is_weights += model.prior_energy(Y)
 
-		log_is_weights += self.prior_loglikelihood(Y)
+				if Distribution.VERBOSITY > 1:
+					print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.prior_energy(Y)))
 
-		return Y, log_is_weights
+			# decrease temperature
+			for step, beta in enumerate(annealing_weights):
+				# tune proposal distribution
+				for i in range(len(self.subspaces)):
+					# adjust standard deviations
+					model.subspaces[i].scales = (1. - beta) + beta * self.subspaces[i].scales
+
+				log_is_weights -= model.prior_energy(Y)
+
+				# apply Gibbs sampling transition operator
+				S = model.sample_scales(Y)
+				Y = model._sample_posterior_cond(Y, X, S, W, WX, Q)
+
+				log_is_weights += model.prior_energy(Y)
+
+				if Distribution.VERBOSITY > 1:
+					print '{0:6}\t{1:10.2f}'.format(len(annealing_weights) - step, mean(self.prior_energy(Y)))
+
+			log_is_weights -= self.prior_energy(Y)
+
+			# Metropolis accept/reject step
+			reject = (rand(1, X.shape[1]) > exp(log_is_weights)).flatten()
+			Y[:, reject] = Y_old[:, reject]
+
+			if reject[0]:
+				print 'R'
+
+		return Y
 
 
 
@@ -796,17 +823,16 @@ class ISA(Distribution):
 		lf_num_steps = kwargs.get('lf_num_steps', 10)
 		lf_step_size = kwargs.get('lf_step_size', 0.01) + zeros([1, X.shape[1]])
 
-		# nullspace basis
+		# nullspace basis and projection matrix
 		B = self.nullspace_basis()
-
-		if Y is None:
-			# initialize hidden variables
-			Y = self.sample_prior(X.shape[1])
-
-		# make sure hidden and visible states are consistent
-		WX = dot(pinv(self.A), X)
 		BB = dot(B.T, B)
-		Y = Wx + dot(BB, Y)
+
+		# filter responses
+		WX = dot(pinv(self.A), X)
+
+		# initial hidden state
+		Y = WX + dot(BB, Y) if Y is not None else \
+			WX + dot(BB, self.sample_prior(X.shape[1]))
 
 		for step in range(num_steps):
 			# sample momentum
