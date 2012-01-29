@@ -9,7 +9,10 @@ __version__ = '1.1.1'
 
 from numpy import histogram2d, cov, sqrt, sum, multiply, dot
 from numpy.linalg import inv
-from matplotlib.pyplot import clf, contour, axis, draw
+try:
+	from matplotlib.pyplot import clf, contour, axis, draw
+except:
+	pass
 
 def contours(data, bins=20, levels=10, threshold=3., **kwargs):
 	"""

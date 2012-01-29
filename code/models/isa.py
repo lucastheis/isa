@@ -774,8 +774,9 @@ class ISA(Distribution):
 			reject = (rand(1, X.shape[1]) > exp(log_is_weights)).flatten()
 			Y[:, reject] = Y_old[:, reject]
 
-			if reject[0]:
-				print 'R'
+			if Distribution.VERBOSITY > 1:
+				print mean(reject), 'rejected'
+
 
 		return Y
 
