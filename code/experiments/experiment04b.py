@@ -15,30 +15,32 @@ from tools import contours, mapp
 from pgf import *
 from pdb import set_trace
 from time import time
+from tools import Experiment
+from copy import deepcopy
 
-Distribution.VERBOSITY = 0
+Distribution.VERBOSITY = 2
 mapp.max_processes = 1
 
 # transition operator parameters
 parameters = {
 	'gibbs': {
-		'num_steps': 8,
+		'num_steps': 5,
 	},
 	'tempered': {
 		'num_steps': 1,
-		'annealing_weights': arange(0.8, 1., 0.05)
+		'annealing_weights': arange(0.98, 1., 0.0025)
 	},
 	'hmc': {
 		'num_steps': 5,
-		'lf_step_size': 1.,
-		'lf_num_steps': 20
+		'lf_step_size': 0.01,
+		'lf_num_steps': 30
 	},
 }
 
 # number of transition operator applications
 num_steps = {
-	'gibbs': 10,
-	'tempered': 10,
+	'gibbs': 40,
+	'tempered': 20,
 	'hmc': 20,
 }
 
@@ -86,7 +88,7 @@ def main(argv):
 	times = {}
 
 	for sampling_method in parameters:
-		params = parameters[sampling_method]
+		params = deepcopy(parameters[sampling_method])
 		params['num_steps'] *= num_steps[sampling_method]
 
 		start = time()
@@ -132,6 +134,7 @@ def main(argv):
 	xlabel('time in seconds')
 	ylabel('average energy')
 
+	savefig('convergence.tex')
 	draw()
 
 	return 0

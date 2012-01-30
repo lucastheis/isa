@@ -775,7 +775,7 @@ class ISA(Distribution):
 			Y[:, reject] = Y_old[:, reject]
 
 			if Distribution.VERBOSITY > 1:
-				print mean(reject), 'rejected'
+				print mean(-reject), 'accepted'
 
 
 		return Y
