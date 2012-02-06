@@ -28,19 +28,20 @@ parameters = {
 	},
 	'tempered': {
 		'num_steps': 1,
-		'annealing_weights': arange(0.98, 1., 0.0025)
+		'annealing_weights': arange(0.998, 1., 0.0005),#arange(0.995, 1., 0.001)
 	},
 	'hmc': {
-		'num_steps': 5,
+		'num_steps': 1,
 		'lf_step_size': 0.01,
-		'lf_num_steps': 30
+		'lf_num_steps': 80,
+		'lf_randomness': 0.1,
 	},
 }
 
 # number of transition operator applications
 num_steps = {
 	'gibbs': 40,
-	'tempered': 20,
+	'tempered': 40,
 	'hmc': 20,
 }
 
@@ -127,7 +128,7 @@ def main(argv):
 	for sampling_method in parameters:
 		times[sampling_method] = arange(len(energies[sampling_method])) * times[sampling_method]
 		plot(times[sampling_method], energies[sampling_method])
-	legend(*legend_entries.values(), location='south east')
+	legend(*legend_entries.values(), location='north east')
 
 	plot([0, max(hstack(times.values()))], [energy_exp, energy_exp], 'k--')
 

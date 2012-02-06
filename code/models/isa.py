@@ -53,8 +53,8 @@ class ISA(Distribution):
 			self.subspaces.append(GSM(mod(num_hiddens, ssize)))
 
 		# initialize subspace distributions
-		for model in self.subspaces:
-			model.initialize()
+#		for model in self.subspaces:
+#			model.initialize()
 
 
 
@@ -741,7 +741,7 @@ class ISA(Distribution):
 
 				log_is_weights -= model.prior_energy(Y)
 
-				# apply Gibbs sampling transition operator
+				# apply transition operator
 				S = model.sample_scales(Y)
 				Y = model._sample_posterior_cond(Y, X, S, W, WX, Q)
 
@@ -759,7 +759,7 @@ class ISA(Distribution):
 
 				log_is_weights -= model.prior_energy(Y)
 
-				# apply Gibbs sampling transition operator
+				# apply transition operator
 				S = model.sample_scales(Y)
 				Y = model._sample_posterior_cond(Y, X, S, W, WX, Q)
 
@@ -776,7 +776,6 @@ class ISA(Distribution):
 
 			if Distribution.VERBOSITY > 1:
 				print mean(-reject), 'accepted'
-
 
 		return Y
 
@@ -822,7 +821,8 @@ class ISA(Distribution):
 
 		# hyperparameters
 		lf_num_steps = kwargs.get('lf_num_steps', 10)
-		lf_step_size = kwargs.get('lf_step_size', 0.01) + zeros([1, X.shape[1]])
+		lf_step_size = kwargs.get('lf_step_size', 0.01)
+		lf_randomness = kwargs.get('lf_randomness', 0.)
 
 		# nullspace basis and projection matrix
 		B = self.nullspace_basis()
@@ -836,6 +836,8 @@ class ISA(Distribution):
 			WX + dot(BB, self.sample_prior(X.shape[1]))
 
 		for step in range(num_steps):
+			lf_step_size_rnd = (1. + lf_randomness * (2. * rand() - 1.)) * lf_step_size
+
 			# sample momentum
 			P = randn(B.shape[0], X.shape[1])
 
@@ -844,16 +846,16 @@ class ISA(Distribution):
 			Hold = self.prior_energy(Y) + sum(square(P), 0) / 2.
 
 			# first half-step
-			P -= lf_step_size / 2. * dot(B, self.prior_energy_gradient(Y))
-			Y += lf_step_size * dot(B.T, P)
+			P -= lf_step_size_rnd / 2. * dot(B, self.prior_energy_gradient(Y))
+			Y += lf_step_size_rnd * dot(B.T, P)
 
 			# full leapfrog steps
 			for _ in range(lf_num_steps - 1):
-				P -= lf_step_size * dot(B, self.prior_energy_gradient(Y))
-				Y += lf_step_size * dot(B.T, P)
+				P -= lf_step_size_rnd * dot(B, self.prior_energy_gradient(Y))
+				Y += lf_step_size_rnd * dot(B.T, P)
 
 			# final half-step
-			P -= lf_step_size / 2. * dot(B, self.prior_energy_gradient(Y))
+			P -= lf_step_size_rnd / 2. * dot(B, self.prior_energy_gradient(Y))
 
 			# make sure hidden and visible state stay consistent
 			Y = WX + dot(BB, Y)

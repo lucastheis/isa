@@ -22,27 +22,28 @@ from numpy.linalg import svd
 
 # PS, SS, OC, ND, MI, NS, MC, LS, RG
 parameters = [
-	['8x8',     1, 1, 100,  40, 32, 0,  False, False],
-	['10x10',   1, 1, 100,  40, 32, 0,  False, False],
-	['12x12',   1, 1, 100,  40, 32, 0,  False, False],
-	['14x14',   1, 1, 100,  40, 32, 0,  False, False],
-	['16x16',   1, 1, 100,  40, 32, 0,  False, False],
-	['8x8',     2, 1, 100,  40, 32, 0,  False, False],
-	['16x16',   2, 1, 100,  40, 32, 0,  False, False],
-	['8x8',     4, 1, 100,  40, 32, 0,  False, False],
-	['16x16',   4, 1, 100,  40, 32, 0,  False, False],
-	['8x8',    63, 1, 100,  40, 32, 0,  False, False],
-	['16x16',  32, 1, 100,  40, 32, 0,  False, False],
-	['16x16', 128, 1, 100,  40, 32, 0,  False, False],
-	['8x8',     1, 2, 100,  80, 32, 10, False, False],
-	['8x8',     2, 2, 100,  80, 32, 10, False, False],
+	['8x8',     1, 1, 100,  40, 32,  0, False, False],
+	['10x10',   1, 1, 100,  40, 32,  0, False, False],
+	['12x12',   1, 1, 100,  40, 32,  0, False, False],
+	['14x14',   1, 1, 100,  40, 32,  0, False, False],
+	['16x16',   1, 1, 100,  40, 32,  0, False, False],
+	['8x8',     2, 1, 100,  40, 32,  0, False, False],
+	['16x16',   2, 1, 100,  40, 32,  0, False, False],
+	['8x8',     4, 1, 100,  40, 32,  0, False, False],
+	['16x16',   4, 1, 100,  40, 32,  0, False, False],
+	['8x8',    63, 1, 100,  40, 32,  0, False, False],
+	['16x16',  32, 1, 100,  40, 32,  0, False, False],
+	['16x16', 128, 1, 100,  40, 32,  0, False, False],
+	['8x8',     1, 2, 100, 200, 32,  5, False, False],
+	['8x8',     2, 2, 100, 200, 32,  5, False, False],
 	['8x8',     4, 2, 100,  80, 32, 10, False, False],
 	['8x8',     1, 2, 100,  80, 32, 20, False, False],
-	['8x8',     2, 2, 100,  80, 32, 20, False, False],
+	['8x8',     2, 2, 100, 200, 32, 20, False, False],
 	['8x8',     4, 2, 100,  80, 32, 20, False, False],
 	['8x8',     1, 2, 100,  80, 32, 20, False, True],
 	['8x8',     1, 2, 100,  80, 32, 20, True,  False],
-	['16x16',   1, 2, 100, 100, 32, 20, False, False],
+	['16x16',   1, 2, 100, 200, 32,  5, False, False],
+	['8x8',    63, 2, 100,  40, 32,  0, False, False],
 ]
 
 def main(argv):
@@ -110,7 +111,7 @@ def main(argv):
 
 	# initialize ISA model with Laplace marginals
 	isa = ISA(data.shape[0] - 1, (data.shape[0] - 1) * overcompleteness, ssize=ssize)
-	isa.initialize(method='student')
+	isa.initialize(method='laplace')
 
 
 	if len(argv) > 2:
@@ -136,6 +137,10 @@ def main(argv):
 		# model DC component separately with mixture of Gaussians
 		model = ConcatModel(MoGaussian(10), StackedModel(wt, isa))
 
+	experiment['parameters'] = parameters[int(argv[1])]
+	experiment['transforms'] = [dct, wt]
+	experiment['model'] = model
+
 	# train mixture model on DC component
 	model.train(data, 0, max_iter=100)
 
@@ -145,7 +150,10 @@ def main(argv):
 		train_prior=False,
 		persistent=True,
 		method='sgd', 
-		sampling_method=('gibbs', {'num_steps': 10}))
+		sampling_method=('gibbs', {'num_steps': num_steps}))
+
+	# save results
+	experiment.save('results/experiment01a/experiment01a.0.{0}.{1}.xpck')
 
 	model.train(data[:, :20000], 1,
 		max_iter=max_iter, 
@@ -155,18 +163,21 @@ def main(argv):
 		method='sgd', 
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 
+	# save results
+	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
+
+	# initialize samples
+	Y = model[1].model.sample_posterior(data[:, :num_data], method=('gibbs', {'num_steps': 10}))
+
 	model.train(data[:, :num_data], 1,
-		max_iter=10,
+		max_iter=20,
 		train_prior=True,
 		train_subspaces=train_subspaces,
 		persistent=True,
 		method='lbfgs', 
-		sampling_method=('gibbs', {'num_steps': num_steps}))
+		sampling_method=('gibbs', {'num_steps': num_steps, 'Y': Y}))
 
 	# save results
-	experiment['parameters'] = parameters[int(argv[1])]
-	experiment['transforms'] = [dct, wt]
-	experiment['model'] = model
 	experiment.save('results/experiment01a/experiment01a.{0}.{1}.xpck')
 
 	return 0
