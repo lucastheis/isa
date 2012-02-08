@@ -135,6 +135,9 @@ class ISA(Distribution):
 
 		@type  sampling_method: tuple
 		@param sampling_method: method and parameters to generate hidden representations
+
+		@type  init_sampling_steps: integer
+		@param init_sampling_steps: number of steps used to initialize persistent samples
 		"""
 
 		max_iter = kwargs.get('max_iter', 100)
@@ -142,6 +145,7 @@ class ISA(Distribution):
 		train_prior = kwargs.get('train_prior', True)
 		train_subspaces = kwargs.get('train_subspaces', False)
 		persistent = kwargs.get('persistent', True)
+		init_sampling_steps = kwargs.get('init_sampling_steps', 0)
 
 		if Distribution.VERBOSITY > 0:
 			if self.num_hiddens > self.num_visibles:
@@ -154,6 +158,12 @@ class ISA(Distribution):
 
 		if isinstance(sampling_method, str):
 			sampling_method = (sampling_method, {})
+
+		if persistent and init_sampling_steps:
+			# initialize samples
+			sampling_method[1]['Y'] = self.sample_posterior(X, 
+				method=(sampling_method[0], 
+					dict(sampling_method[1], num_steps=init_sampling_steps)))
 
 		if adaptive and 'step_width' not in method[1]:
 			method[1]['step_width'] = 0.001

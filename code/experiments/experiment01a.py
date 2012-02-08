@@ -111,7 +111,9 @@ def main(argv):
 
 	# initialize ISA model with Laplace marginals
 	isa = ISA(data.shape[0] - 1, (data.shape[0] - 1) * overcompleteness, ssize=ssize)
-	isa.initialize(method='laplace')
+
+	if ssize == 1:
+		isa.initialize(method='laplace')
 
 
 	if len(argv) > 2:
@@ -146,11 +148,11 @@ def main(argv):
 
 	# initialize, train and finetune ISA model
 	model.train(data[:, :20000], 1,
-		max_iter=20, 
+		max_iter=60, 
 		train_prior=False,
 		persistent=True,
 		method='sgd', 
-		sampling_method=('gibbs', {'num_steps': num_steps}))
+		sampling_method=('gibbs', {'num_steps': 2}))
 
 	# save results
 	experiment.save('results/experiment01a/experiment01a.0.{0}.{1}.xpck')
@@ -166,16 +168,14 @@ def main(argv):
 	# save results
 	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
 
-	# initialize samples
-	Y = model[1].model.sample_posterior(data[:, :num_data], method=('gibbs', {'num_steps': 10}))
-
 	model.train(data[:, :num_data], 1,
 		max_iter=20,
 		train_prior=True,
 		train_subspaces=train_subspaces,
 		persistent=True,
+		init_sampling_steps=10,
 		method='lbfgs', 
-		sampling_method=('gibbs', {'num_steps': num_steps, 'Y': Y}))
+		sampling_method=('gibbs', {'num_steps': num_steps}))
 
 	# save results
 	experiment.save('results/experiment01a/experiment01a.{0}.{1}.xpck')
