@@ -25,15 +25,19 @@ class LinearTransform(Transform):
 
 		if 'A' in kwargs:
 			self.A = asarray(kwargs['A'])
+			self.dim = self.A.shape[0]
 
 		if len(args) > 0:
 			if 'basis' in kwargs:
 				raise ValueError('Did you forget to use the `dim` keyword?')
 			self.A = asarray(args[0])
+			self.dim = self.A.shape[0]
 
 		elif 'basis' in kwargs:
 			if 'dim' not in kwargs:
 				raise ValueError('Please specify a dimensionality, `dim`.')
+
+			self.dim = kwargs['dim']
 
 			if kwargs['basis'].upper() == 'DCT':
 				I, J = indices([kwargs['dim'], kwargs['dim']])
