@@ -41,7 +41,6 @@ titles = {
 
 def main(argv):
 	seterr(over='raise', divide='raise', invalid='raise')
-	seed(4)
 
 	## SAMPLING METHOD
 
@@ -55,10 +54,17 @@ def main(argv):
 
 	## MODEL
 
+#	isa = ISA(1, 3)
+#	isa.initialize(method='student')
+#	isa.A[:] = 1.
+#	isa.A += randn(3) / 5.
+
 	isa = ISA(1, 3)
 	isa.initialize(method='student')
-	isa.A[:] = 1.
-	isa.A += randn(3) / 5.
+	isa.A[:] = 0.8
+	isa.A += randn(3) / 10.
+#	for gsm in isa.subspaces:
+#		gsm.initialize(method='student')
 
 
 

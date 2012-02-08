@@ -699,9 +699,9 @@ class ISA(Distribution):
 
 	def sample_posterior_tempered(self, X, num_steps=1, annealing_weights=[], Y=None):
 		"""
-		Sample posterior distribution over hidden states using tempered transitions.
-		This method might give better results if the marginals are very kurtotic and
-		the posterior therefore highly multimodal.
+		Sample posterior distribution over hidden states using tempered transitions with
+		Gibbs sampling transtition operator. This method might give better results if the
+		marginals are very kurtotic and the posterior therefore highly multimodal.
 
 		B{References:}
 			- Neal, R. (1994). Sampling from Multimodal Distributions Using Tempered
