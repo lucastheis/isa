@@ -7,11 +7,13 @@ import sys
 sys.path.append('./code')
 
 from tools import Experiment, patchutil
-from matplotlib.pyplot import figure, show
-from numpy import sqrt, dot, square, sum, argsort
+from matplotlib.pyplot import *
+from numpy import sqrt, dot, square, sum, argsort, sort
 
 def main(argv):
 	e = Experiment(argv[1])
+
+	print e['parameters']
 
 	m = e['model']
 
@@ -34,6 +36,12 @@ def main(argv):
 
 	figure()
 	patchutil.show(A_white.T.reshape(-1, patch_size, patch_size))
+
+	figure()
+	plot(sort(sqrt(sum(square(m[1].model.A), 0)))[::-1])
+	axis([0, A.shape[1], 0, 1])
+	xlabel('component')
+	ylabel('feature norm / component standard deviation')
 
 	show()
 
