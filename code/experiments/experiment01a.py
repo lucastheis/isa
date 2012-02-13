@@ -22,28 +22,20 @@ from numpy.linalg import svd
 
 # PS, SS, OC, ND, MI, NS, MC, LS, RG
 parameters = [
+	# complete models
 	['8x8',     1, 1, 100,  40, 32,  0, False, False],
-	['10x10',   1, 1, 100,  40, 32,  0, False, False],
-	['12x12',   1, 1, 100,  40, 32,  0, False, False],
-	['14x14',   1, 1, 100,  40, 32,  0, False, False],
 	['16x16',   1, 1, 100,  40, 32,  0, False, False],
 	['8x8',     2, 1, 100,  40, 32,  0, False, False],
 	['16x16',   2, 1, 100,  40, 32,  0, False, False],
-	['8x8',     4, 1, 100,  40, 32,  0, False, False],
-	['16x16',   4, 1, 100,  40, 32,  0, False, False],
-	['8x8',    63, 1, 100,  40, 32,  0, False, False],
-	['16x16',  32, 1, 100,  40, 32,  0, False, False],
-	['16x16', 128, 1, 100,  40, 32,  0, False, False],
-	['8x8',     1, 2, 100, 200, 32,  5, False, False],
-	['8x8',     2, 2, 100, 200, 32,  5, False, False],
-	['8x8',     4, 2, 100,  80, 32, 10, False, False],
-	['8x8',     1, 2, 100,  80, 32, 20, False, False],
-	['8x8',     2, 2, 100, 200, 32, 20, False, False],
-	['8x8',     4, 2, 100,  80, 32, 20, False, False],
+
+	# overcomplete models
+	['8x8',     1, 2, 100, 200, 32,  2, False, False],
+	['8x8',     2, 2, 100, 400, 32,  2, False, False],
+	['16x16',   1, 2, 100, 200, 32,  2, False, False],
+
+	# special models
 	['8x8',     1, 2, 100,  80, 32, 20, False, True],
 	['8x8',     1, 2, 100,  80, 32, 20, True,  False],
-	['16x16',   1, 2, 100, 200, 32,  5, False, False],
-	['8x8',    63, 2, 100,  40, 32,  0, False, False],
 ]
 
 def main(argv):
@@ -148,7 +140,7 @@ def main(argv):
 
 	# initialize, train and finetune ISA model
 	model.train(data[:, :20000], 1,
-		max_iter=60, 
+		max_iter=100, 
 		train_prior=False,
 		persistent=True,
 		method='sgd', 
@@ -161,6 +153,7 @@ def main(argv):
 		max_iter=max_iter, 
 		train_prior=True,
 		train_subspaces=train_subspaces,
+		init_sampling_steps=10,
 		persistent=True,
 		method='sgd', 
 		sampling_method=('gibbs', {'num_steps': num_steps}))
@@ -173,7 +166,7 @@ def main(argv):
 		train_prior=True,
 		train_subspaces=train_subspaces,
 		persistent=True,
-		init_sampling_steps=10,
+		init_sampling_steps=50,
 		method='lbfgs', 
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 

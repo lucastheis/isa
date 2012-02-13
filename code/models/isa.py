@@ -52,10 +52,6 @@ class ISA(Distribution):
 		if mod(num_hiddens, ssize) > 0:
 			self.subspaces.append(GSM(mod(num_hiddens, ssize)))
 
-		# initialize subspace distributions
-#		for model in self.subspaces:
-#			model.initialize()
-
 
 
 	def initialize(self, X=None, method='data'):
@@ -161,7 +157,10 @@ class ISA(Distribution):
 
 		if persistent and init_sampling_steps:
 			# initialize samples
-			sampling_method[1]['Y'] = self.sample_posterior(X, 
+#			sampling_method[1]['Y'] = self.sample_posterior(X, 
+#				method=(sampling_method[0], 
+#					dict(sampling_method[1], num_steps=init_sampling_steps)))
+			sampling_method[1]['Z'] = self.sample_nullspace(X, 
 				method=(sampling_method[0], 
 					dict(sampling_method[1], num_steps=init_sampling_steps)))
 
@@ -185,7 +184,8 @@ class ISA(Distribution):
 
 			if persistent:
 				# initializes samples in next iteration
-				sampling_method[1]['Y'] = Y
+#				sampling_method[1]['Y'] = Y
+				sampling_method[1]['Z'] = dot(self.nullspace_basis(), Y)
 
 			# optimize linear features (M)
 			if method[0].lower() == 'sgd':
@@ -620,7 +620,7 @@ class ISA(Distribution):
 
 
 
-	def sample_posterior_gibbs(self, X, num_steps=10, Y=None):
+	def sample_posterior_gibbs(self, X, num_steps=10, Y=None, Z=None):
 		"""
 		B{References:}
 			- Doucet, A. (2010). I{A Note on Efficient Conditional Simulation of
@@ -635,8 +635,12 @@ class ISA(Distribution):
 		Q = eye(self.num_hiddens) - dot(W, self.A)
 
 		# initial hidden state
-		Y = WX + dot(Q, Y) if Y is not None else \
-			WX + dot(Q, self.sample_prior(X.shape[1])) # TODO: replace with mean-field approximation
+		if Z is None:
+			Y = WX + dot(Q, Y) if Y is not None else \
+				WX + dot(Q, self.sample_prior(X.shape[1])) # TODO: replace with mean-field approximation
+		else:
+			V = pinv(self.nullspace_basis())
+			Y = WX + dot(V, Z)
 
 		# Gibbs sample between S and Y given X
 		for step in range(num_steps):
