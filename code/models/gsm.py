@@ -22,6 +22,11 @@ class GSM(Distribution):
 		self.scales = 0.75 + rand(num_scales) / 2.
 		self.scales /= mean(self.scales)
 
+		# regularization parameters (inverse Gamma prior)
+		self.alpha = 2. # shape
+		self.beta = 1. # scale
+		self.gamma = 0. # strength
+
 
 
 	def initialize(self, method='cauchy'):
@@ -55,7 +60,9 @@ class GSM(Distribution):
 		@param tol: stop if performance improves less than this threshold
 		"""
 
-		value = self.evaluate(data)
+		value = -mean(self.loglikelihood(data)) \
+			+ self.gamma * (self.alpha + 1) * sum(log(self.scales)) \
+			+ self.gamma / 2. * sum(self.beta / square(self.scales))
 		
 		if Distribution.VERBOSITY > 2:
 			print 0, value
@@ -72,7 +79,8 @@ class GSM(Distribution):
 
 			try:
 				# adjust parameters (M)
-				self.scales = sqrt(sum(post * sqnorms, 1) / sum(post, 1) / self.dim)
+				self.scales = sqrt((mean(post * sqnorms, 1) + self.gamma * self.beta) / \
+					(self.dim * mean(post, 1) + self.gamma * (self.alpha + 1)))
 
 			except FloatingPointError:
 				indices, = where(sum(post, 1) == 0.)
@@ -85,7 +93,9 @@ class GSM(Distribution):
 				value = self.evaluate(data)
 
 			# check for convergence
-			value_ = self.evaluate(data)
+			value_ = -mean(self.loglikelihood(data)) \
+				+ self.gamma * (self.alpha + 1) * sum(log(self.scales)) \
+				+ self.gamma / 2. * sum(self.beta / square(self.scales))
 			if value - value_ < tol:
 				break
 			value = value_

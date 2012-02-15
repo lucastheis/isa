@@ -102,6 +102,7 @@ class Tests(unittest.TestCase):
 			data = gsm1.sample(20000)
 
 			gsm2 = GSM(dim, 2)
+			gsm2.gamma = 0.
 			gsm2.train(data, max_iter=100)
 
 			self.assertTrue(any(abs(gsm1.scales[0] - gsm2.scales) < 1E-1))
