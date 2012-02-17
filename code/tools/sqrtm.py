@@ -41,6 +41,5 @@ def sqrtmi(mat):
 	eigvecs = eigvecs[:, eigvals > 0]
 	eigvals = eigvals[eigvals > 0]
 
-
 	# inverse square root
 	return dot(eigvecs, dot(diag(1. / sqrt(eigvals)), eigvecs.T))

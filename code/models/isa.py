@@ -14,7 +14,7 @@ from numpy.linalg import svd, pinv, inv, det, slogdet
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b
 from scipy.stats import laplace, t
-from tools import gaborf, mapp, logmeanexp, asshmarray
+from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi
 from gsm import GSM
 from copy import deepcopy
 
@@ -126,20 +126,30 @@ class ISA(Distribution):
 		@type  method: tuple
 		@param method: optimization method used to optimize filters
 
+		@type  adative: boolean
+		@param adaptive: automatically adjust step width when using SGD (default: True)
+
 		@type  train_prior: boolean
-		@param train_prior: whether or not to optimize the marginal distributions
+		@param train_prior: whether or not to optimize the marginal distributions (default: True)
+
+		@type  train_subspaces: boolean
+		@param train_subspaces: automatically learn subspace sizes (default: False)
+
+		@type  orthogonalize: boolean
+		@param orthogonalize: after each step, orthogonalize rows of feature matrix (default: False)
 
 		@type  sampling_method: tuple
 		@param sampling_method: method and parameters to generate hidden representations
 
 		@type  init_sampling_steps: integer
-		@param init_sampling_steps: number of steps used to initialize persistent samples
+		@param init_sampling_steps: number of steps used to initialize persistent samples (default: 0)
 		"""
 
 		max_iter = kwargs.get('max_iter', 100)
 		adaptive = kwargs.get('adaptive', True) 
 		train_prior = kwargs.get('train_prior', True)
 		train_subspaces = kwargs.get('train_subspaces', False)
+		orthogonalize = kwargs.get('orthogonalize', False)
 		persistent = kwargs.get('persistent', True)
 		init_sampling_steps = kwargs.get('init_sampling_steps', 0)
 
@@ -157,9 +167,6 @@ class ISA(Distribution):
 
 		if persistent and init_sampling_steps:
 			# initialize samples
-#			sampling_method[1]['Y'] = self.sample_posterior(X, 
-#				method=(sampling_method[0], 
-#					dict(sampling_method[1], num_steps=init_sampling_steps)))
 			sampling_method[1]['Z'] = self.sample_nullspace(X, 
 				method=(sampling_method[0], 
 					dict(sampling_method[1], num_steps=init_sampling_steps)))
@@ -179,12 +186,12 @@ class ISA(Distribution):
 				# learn subspaces (M)
 				Y = self.train_subspaces(Y)
 
-			if train_prior or train_subspaces:
+			if not orthogonalize and train_prior or train_subspaces:
+				# normalize variances of marginals
 				self.normalize_prior()
 
 			if persistent:
 				# initializes samples in next iteration
-#				sampling_method[1]['Y'] = Y
 				sampling_method[1]['Z'] = dot(self.nullspace_basis(), Y)
 
 			# optimize linear features (M)
@@ -200,6 +207,10 @@ class ISA(Distribution):
 
 			else:
 				raise ValueError('Unknown training method \'{0}\'.'.format(method[0]))
+
+			if orthogonalize:
+				# normalize feature matrix
+				self.orthogonalize()
 
 			if Distribution.VERBOSITY > 0:
 				if self.num_hiddens > self.num_visibles:
@@ -437,16 +448,19 @@ class ISA(Distribution):
 		@param max_iter: maximum number of iterations through data set
 
 		@type  batch_size: integer
-		@param batch_size: number of data points used to approximate gradient
+		@param batch_size: number of data points used to approximate gradient (default: 100)
 
 		@type  step_width: float
-		@param step_width: factor by which gradient is multiplied
+		@param step_width: factor by which gradient is multiplied (default: 0.001)
 
 		@type  momentum: float
-		@param momentum: fraction of previous parameter update added to gradient
+		@param momentum: fraction of previous parameter update added to gradient (default: 0.9)
+
+		@type  shuffle: boolean
+		@param shuffle: before each iteration, randomize order of data (default: True)
 
 		@type  pocket: boolean
-		@param pocket: if true, parameters are kept in case of performance degradation
+		@param pocket: do not update parameters in case of performance degradation (default: C{shuffle})
 
 		@rtype: boolean
 		@return: false if no improvement could be achieved
@@ -1091,3 +1105,12 @@ class ISA(Distribution):
 		"""
 
 		return self.num_hiddens > self.num_visibles
+
+
+
+	def orthogonalize(self):
+		"""
+		Symmetrically orthogonalizes the rows of the feature matrix.
+		"""
+
+		self.A = dot(sqrtmi(dot(self.A, self.A.T)), self.A)

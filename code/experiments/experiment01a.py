@@ -20,33 +20,37 @@ Distribution.VERBOSITY = 2
 from numpy import round, sqrt
 from numpy.linalg import svd
 
-# PS, SS, OC, ND, MI, NS, MC, LS, RG
+# PS, SS, OC, ND, MI, NS, MC, LS, RG, TP
 parameters = [
 	# complete models
-	['8x8',     1, 1, 100,  40, 32,  0, False, False],
-	['16x16',   1, 1, 100,  40, 32,  0, False, False],
-	['8x8',     2, 1, 100,  40, 32,  0, False, False],
-	['16x16',   2, 1, 100,  40, 32,  0, False, False],
+	['8x8',     1, 1, 100,  40, 32,  0, False, False, True],
+	['16x16',   1, 1, 100,  40, 32,  0, False, False, True],
+	['8x8',     2, 1, 100,  40, 32,  0, False, False, True],
+	['16x16',   2, 1, 100,  40, 32,  0, False, False, True],
 
 	# overcomplete models
-	['8x8',     1, 2, 100, 200, 32,  2, False, False],
-	['8x8',     2, 2, 100, 400, 32,  2, False, False],
-	['16x16',   1, 2, 100, 200, 32,  2, False, False],
+	['8x8',     1, 2, 100, 200, 32,  2, False, False, True],
+	['8x8',     2, 2, 100, 400, 32,  2, False, False, True],
+	['16x16',   1, 2, 100, 200, 32,  2, False, False, True],
+
+	# overcomplete models with Laplace prior
+	['8x8',     1, 2, 100, 200, 32,  2, False, False, False],
+	['16x16',   1, 2, 100, 200, 32,  2, False, False, False],
 
 	# special models
-	['8x8',     1, 2, 100,  80, 32, 20, False, True],
-	['8x8',     1, 2, 100,  80, 32, 20, True,  False],
+	['8x8',     1, 2, 100,  80, 32, 20, False, True,  True],
+	['8x8',     1, 2, 100,  80, 32, 20, True,  False, True],
 ]
 
 def main(argv):
 	if len(argv) < 2:
 		print 'Usage:', argv[0], '<params_id> [experiment]'
 		print
-		print '  {0:>3} {1:>5} {2:>3} {3:>4} {4:>5} {5:>4} {6:>5} {7:>3} {8:>5} {9:>5}'.format(
-			'ID', 'PS', 'SS', 'OC', 'ND', 'MI', 'NS', 'MC', 'LS', 'RG')
+		print '  {0:>3} {1:>5} {2:>3} {3:>4} {4:>5} {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5}'.format(
+			'ID', 'PS', 'SS', 'OC', 'ND', 'MI', 'NS', 'MC', 'LS', 'RG', 'TP')
 
 		for id, params in enumerate(parameters):
-			print '  {0:>3} {1:>5} {2:>3} {3:>3}x {4:>4}k {5:>4} {6:>5} {7:>3} {8:>5} {9:>5}'.format(id, *params)
+			print '  {0:>3} {1:>5} {2:>3} {3:>3}x {4:>4}k {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5}'.format(id, *params)
 
 		print
 		print '  ID = parameter set'
@@ -59,6 +63,7 @@ def main(argv):
 		print '  MC = number of Gibbs sampling steps'
 		print '  LS = learn subspace sizes'
 		print '  RG = radially Gaussianize first'
+		print '  TP = optimize marginal distributions'
 		print
 		print '  If an experiment is specified, it will be used to initialize the model parameters.'
 
@@ -82,11 +87,13 @@ def main(argv):
 	noise_level, \
 	num_steps, \
 	train_subspaces, \
-	radially_gaussianize = parameters[int(argv[1])]
+	radially_gaussianize, \
+	train_prior = parameters[int(argv[1])]
 	num_data = num_data * 1000
 
+	
 
-
+	### DATA HANDLING
 
 	# load data, log-transform and center data
 	data = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
@@ -101,12 +108,14 @@ def main(argv):
 
 
 
-	# initialize ISA model with Laplace marginals
+	### MODEL DEFINITION
+
+	# create ISA model
 	isa = ISA(data.shape[0] - 1, (data.shape[0] - 1) * overcompleteness, ssize=ssize)
 
 	if ssize == 1:
+		# initialize ISA marginals with Laplace distribution
 		isa.initialize(method='laplace')
-
 
 	if len(argv) > 2:
 		# initialize ISA model with already trained model
@@ -120,7 +129,11 @@ def main(argv):
 		isa.subspaces = results['model'][1].model.subspaces
 
 
+
+	### FURTHER PREPROCESSING
+
 	if radially_gaussianize:
+		# radially Gaussianize the data
 		gsm = GSM(data.shape[0] - 1, 10)
 		gsm.train(wt(data[1:]), max_iter=100)
 
@@ -131,12 +144,18 @@ def main(argv):
 		# model DC component separately with mixture of Gaussians
 		model = ConcatModel(MoGaussian(10), StackedModel(wt, isa))
 
-	experiment['parameters'] = parameters[int(argv[1])]
-	experiment['transforms'] = [dct, wt]
-	experiment['model'] = model
+
+
+	### TRAIN MODEL
 
 	# train mixture model on DC component
 	model.train(data, 0, max_iter=100)
+
+	# turn on a little bit of regularization of the marginals
+	for gsm in model[1].model.subspaces:
+		gsm.gamma = 1e-3
+		gsm.alpha = 2.
+		gsm.beta = 1.
 
 	# initialize, train and finetune ISA model
 	model.train(data[:, :20000], 1,
@@ -146,24 +165,50 @@ def main(argv):
 		method='sgd', 
 		sampling_method=('gibbs', {'num_steps': 2}))
 
-	# save results
+	# save intermediate results
+	experiment['parameters'] = parameters[int(argv[1])]
+	experiment['transforms'] = [dct, wt]
+	experiment['model'] = model
 	experiment.save('results/experiment01a/experiment01a.0.{0}.{1}.xpck')
 
+	# train using SGD with regularization turned on
 	model.train(data[:, :20000], 1,
 		max_iter=max_iter, 
-		train_prior=True,
+		train_prior=train_prior,
+		train_subspaces=train_subspaces,
+		init_sampling_steps=10,
+		persistent=True,
+		method='sgd', 
+		sampling_method=('gibbs', {'num_steps': 2}))
+
+	# save intermediate results
+	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
+
+	if patch_size == '16x16' and overcompleteness > 1:
+		# prevent out-of-memory issues
+		mapp.max_processes = 2
+
+	# turn off regularization
+	for gsm in model[1].model.subspaces:
+		gsm.gamma = 0.
+
+	# train using SGD with regularization turned off
+	model.train(data[:, :20000], 1,
+		max_iter=20, 
+		train_prior=train_prior,
 		train_subspaces=train_subspaces,
 		init_sampling_steps=10,
 		persistent=True,
 		method='sgd', 
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 
-	# save results
-	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
+	# save intermediate results
+	experiment.save('results/experiment01a/experiment01a.2.{0}.{1}.xpck')
 
+	# train using L-BFGS
 	model.train(data[:, :num_data], 1,
 		max_iter=20,
-		train_prior=True,
+		train_prior=train_prior,
 		train_subspaces=train_subspaces,
 		persistent=True,
 		init_sampling_steps=50,
