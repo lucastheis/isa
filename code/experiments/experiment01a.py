@@ -29,13 +29,13 @@ parameters = [
 	['16x16',   2, 1, 100,  40, 32,  0, False, False, True],
 
 	# overcomplete models
-	['8x8',     1, 2, 100, 200, 32,  2, False, False, True],
-	['8x8',     2, 2, 100, 400, 32,  2, False, False, True],
-	['16x16',   1, 2, 100, 200, 32,  2, False, False, True],
+	['8x8',     1, 2, 100, 200, 32,  5, False, False, True],
+	['8x8',     2, 2, 100, 400, 32,  5, False, False, True],
+	['16x16',   1, 2, 100, 200, 32,  5, False, False, True],
 
 	# overcomplete models with Laplace prior
-	['8x8',     1, 2, 100, 200, 32,  2, False, False, False],
-	['16x16',   1, 2, 100, 200, 32,  2, False, False, False],
+	['8x8',     1, 2, 100, 200, 32,  5, False, False, False],
+	['16x16',   1, 2, 100, 200, 32,  5, False, False, False],
 
 	# special models
 	['8x8',     1, 2, 100,  80, 32, 20, False, True,  True],
@@ -99,11 +99,11 @@ def main(argv):
 	data = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
 	data = preprocess(data, noise_level=noise_level)
 	
-	# apply DCT to data
+	# apply discrete cosine transform
 	dct = LinearTransform(dim=int(sqrt(data.shape[0])), basis='DCT')
 	data = dct(data)
 
-	# whitening transform
+	# create whitening transform
 	wt = WhiteningTransform(data[1:], symmetric=True)
 
 
@@ -134,8 +134,8 @@ def main(argv):
 
 	if radially_gaussianize:
 		# radially Gaussianize the data
-		gsm = GSM(data.shape[0] - 1, 10)
-		gsm.train(wt(data[1:]), max_iter=100)
+		gsm = GSM(data.shape[0] - 1, 20)
+		gsm.train(wt(data[1:]), max_iter=100, tol=1e-7)
 
 		rg = RadialGaussianization(gsm)
 
@@ -184,17 +184,13 @@ def main(argv):
 	# save intermediate results
 	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
 
-	if patch_size == '16x16' and overcompleteness > 1:
-		# prevent out-of-memory issues
-		mapp.max_processes = 2
-
 	# turn off regularization
 	for gsm in model[1].model.subspaces:
 		gsm.gamma = 0.
 
 	# train using SGD with regularization turned off
 	model.train(data[:, :20000], 1,
-		max_iter=20, 
+		max_iter=100, 
 		train_prior=train_prior,
 		train_subspaces=train_subspaces,
 		init_sampling_steps=10,
@@ -204,6 +200,10 @@ def main(argv):
 
 	# save intermediate results
 	experiment.save('results/experiment01a/experiment01a.2.{0}.{1}.xpck')
+
+	if patch_size == '16x16' and overcompleteness > 1:
+		# prevent out-of-memory issues by disabling parallelization
+		mapp.max_processes = 1
 
 	# train using L-BFGS
 	model.train(data[:, :num_data], 1,

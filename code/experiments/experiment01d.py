@@ -32,10 +32,10 @@ def main(argv):
 	patch_size = int(sqrt(A.shape[0]) + 0.5)
 
 	figure()
-	patchutil.show(A.T.reshape(-1, patch_size, patch_size))
+	patchutil.show(A.T.reshape(-1, patch_size, patch_size), num_rows=patch_size)
 
 	figure()
-	patchutil.show(A_white.T.reshape(-1, patch_size, patch_size))
+	patchutil.show(A_white.T.reshape(-1, patch_size, patch_size), num_rows=patch_size)
 
 	figure()
 	plot(sort(sqrt(sum(square(m[1].model.A), 0)))[::-1])
