@@ -23,7 +23,7 @@ class ISA(Distribution):
 	An implementation of overcomplete ISA using Gaussian scale mixtures.
 	"""
 
-	def __init__(self, num_visibles, num_hiddens=None, ssize=1):
+	def __init__(self, num_visibles, num_hiddens=None, ssize=1, noise=False):
 		"""
 		@type  num_visibles: integer
 		@param num_visibles: data dimensionality
@@ -33,6 +33,9 @@ class ISA(Distribution):
 
 		@type  ssize: integer
 		@param ssize: subspace dimensionality
+
+		@type  noise: boolean
+		@param noise: add additional hidden units for noise
 		"""
 
 		if num_hiddens is None:
@@ -49,6 +52,13 @@ class ISA(Distribution):
 		self.subspaces = [
 			GSM(ssize) for _ in range(num_hiddens / ssize)]
 
+		self._noise = noise
+		
+		if noise:
+			# add Gaussian subspace and extend linear features
+			self.subspaces.append(GSM(num_visibles, 1))
+			self.A = hstack([self.A, eye(num_visibles)])
+
 		if mod(num_hiddens, ssize) > 0:
 			self.subspaces.append(GSM(mod(num_hiddens, ssize)))
 
@@ -56,7 +66,7 @@ class ISA(Distribution):
 
 	def initialize(self, X=None, method='data'):
 		"""
-		Initializes linear features with more sensible values.
+		Initializes parameter values with more sensible values.
 
 		@type  X: array_like
 		@param X: data points stored in columns
@@ -253,6 +263,7 @@ class ISA(Distribution):
 
 
 
+	# TODO: take noise into account
 	def train_subspaces(self, Y, **kwargs):
 		"""
 		Improves likelihood through spliting and merging of subspaces. This function
@@ -360,6 +371,7 @@ class ISA(Distribution):
 
 
 
+	# TODO: take noise into account
 	def train_lbfgs(self, Y, **kwargs):
 		"""
 		A stochastic variant of L-BFGS.
@@ -439,6 +451,7 @@ class ISA(Distribution):
 
 
 
+	# TODO: take noise into account
 	def train_sgd(self, Y, **kwargs):
 		"""
 		Optimize linear features to maximize the joint log-likelihood of visible
