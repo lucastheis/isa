@@ -10,7 +10,7 @@ from distribution import Distribution
 from numpy import *
 from numpy import min, max, round
 from numpy.random import randint, randn, rand, logseries, permutation
-from numpy.linalg import svd, pinv, inv, det, slogdet
+from numpy.linalg import svd, pinv, inv, det, slogdet, cholesky
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b
 from scipy.stats import laplace, t
@@ -34,7 +34,7 @@ class ISA(Distribution):
 		@type  ssize: integer
 		@param ssize: subspace dimensionality
 
-		@type  noise: boolean
+		@type  noise: bool
 		@param noise: add additional hidden units for noise
 		"""
 
@@ -50,17 +50,13 @@ class ISA(Distribution):
 
 		# subspace densities
 		self.subspaces = [
-			GSM(ssize) for _ in range(num_hiddens / ssize)]
-
-		self._noise = noise
-		
-		if noise:
-			# add Gaussian subspace and extend linear features
-			self.subspaces.append(GSM(num_visibles, 1))
-			self.A = hstack([self.A, eye(num_visibles)])
+			GSM(ssize) for _ in range(int(num_hiddens) / int(ssize))]
 
 		if mod(num_hiddens, ssize) > 0:
 			self.subspaces.append(GSM(mod(num_hiddens, ssize)))
+
+		self._noise = False
+		self.noise = noise
 
 
 
@@ -97,29 +93,30 @@ class ISA(Distribution):
 			# initialize with Gaussian white noise
 			self.A = randn(num_visibles, num_hiddens)
 
-		elif method.lower() == 'laplace':
-			# fit mixture of Gaussian to multivariate Laplace
-			samples = randn(self.subspaces[0].dim, 10000)
-			samples = samples / sqrt(sum(square(samples), 0))
-			samples = laplace.rvs(size=[1, 10000]) * samples
+		elif method.lower() == 'laplace' or method.lower() == 'student':
+			if method.lower() == 'laplace':
+				# approximate multivariate Laplace with GSM
+				samples = randn(self.subspaces[0].dim, 10000)
+				samples = samples / sqrt(sum(square(samples), 0))
+				samples = laplace.rvs(size=[1, 10000]) * samples
+			else:
+				samples = randn(self.subspaces[0].dim, 10000)
+				samples = samples / sqrt(sum(square(samples), 0))
+				samples = t.rvs(2., size=[1, 10000]) * samples
 
-			gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
-			gsm.train(samples, max_iter=100)
+			if self.noise:
+				# ignore first subspace
+				gsm = GSM(self.subspaces[1].dim, self.subspaces[1].num_scales)
+				gsm.train(samples, max_iter=100)
 
-			for m in self.subspaces:
-				m.scales = gsm.scales.copy()
+				for m in self.subspaces[1:]:
+					m.scales = gsm.scales.copy()
+			else:
+				gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
+				gsm.train(samples, max_iter=100)
 
-		elif method.lower() == 'student':
-			# fit mixture of Gaussian to multivariate Laplace
-			samples = randn(self.subspaces[0].dim, 10000)
-			samples = samples / sqrt(sum(square(samples), 0))
-			samples = t.rvs(2., size=[1, 10000]) * samples
-
-			gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
-			gsm.train(samples, max_iter=100)
-
-			for m in self.subspaces:
-				m.scales = gsm.scales.copy()
+				for m in self.subspaces:
+					m.scales = gsm.scales.copy()
 
 		else:
 			raise ValueError('Unknown initialization method \'{0}\'.'.format(method))
@@ -136,16 +133,16 @@ class ISA(Distribution):
 		@type  method: tuple
 		@param method: optimization method used to optimize filters
 
-		@type  adative: boolean
+		@type  adative: bool
 		@param adaptive: automatically adjust step width when using SGD (default: True)
 
-		@type  train_prior: boolean
+		@type  train_prior: bool
 		@param train_prior: whether or not to optimize the marginal distributions (default: True)
 
-		@type  train_subspaces: boolean
+		@type  train_subspaces: bool
 		@param train_subspaces: automatically learn subspace sizes (default: False)
 
-		@type  orthogonalize: boolean
+		@type  orthogonalize: bool
 		@param orthogonalize: after each step, orthogonalize rows of feature matrix (default: False)
 
 		@type  sampling_method: tuple
@@ -263,7 +260,6 @@ class ISA(Distribution):
 
 
 
-	# TODO: take noise into account
 	def train_subspaces(self, Y, **kwargs):
 		"""
 		Improves likelihood through spliting and merging of subspaces. This function
@@ -302,6 +298,10 @@ class ISA(Distribution):
 			# determine correlation of subspace energies
 			corr = corrcoef(energies)
 			corr = corr - triu(corr)
+
+			if self._noise:
+				# noise subspace shouldn't get merged
+				corr[:, 0] = -1.
 
 			for _ in range(max_merge):
 				# pick subspaces with maximal correlation
@@ -371,7 +371,6 @@ class ISA(Distribution):
 
 
 
-	# TODO: take noise into account
 	def train_lbfgs(self, Y, **kwargs):
 		"""
 		A stochastic variant of L-BFGS.
@@ -385,10 +384,10 @@ class ISA(Distribution):
 		@type  step_width: float
 		@param step_width: factor by which gradient is multiplied
 
-		@type  pocket: boolean
+		@type  pocket: bool
 		@param pocket: if true, parameters are kept in case of performance degradation
 
-		@rtype: boolean
+		@rtype: bool
 		@return: false if no improvement could be achieved
 
 		B{References}:
@@ -451,7 +450,6 @@ class ISA(Distribution):
 
 
 
-	# TODO: take noise into account
 	def train_sgd(self, Y, **kwargs):
 		"""
 		Optimize linear features to maximize the joint log-likelihood of visible
@@ -469,13 +467,13 @@ class ISA(Distribution):
 		@type  momentum: float
 		@param momentum: fraction of previous parameter update added to gradient (default: 0.9)
 
-		@type  shuffle: boolean
+		@type  shuffle: bool
 		@param shuffle: before each iteration, randomize order of data (default: True)
 
-		@type  pocket: boolean
+		@type  pocket: bool
 		@param pocket: do not update parameters in case of performance degradation (default: C{shuffle})
 
-		@rtype: boolean
+		@rtype: bool
 		@return: false if no improvement could be achieved
 		"""
 
@@ -1113,7 +1111,7 @@ class ISA(Distribution):
 		"""
 		Return C{true} if model is overcomplete, otherwise C{false}.
 
-		@rtype: boolean
+		@rtype: bool
 		@return: whether or not the model is overcomplete
 		"""
 
@@ -1127,3 +1125,52 @@ class ISA(Distribution):
 		"""
 
 		self.A = dot(sqrtmi(dot(self.A, self.A.T)), self.A)
+
+	
+
+	@property
+	def noise(self):
+		"""
+		Whether or not noise is explicitly modeled.
+		"""
+
+		return self._noise
+
+
+
+	@noise.setter
+	def noise(self, noise):
+		"""
+		Enables or disables the Gaussian noise. Disabling the noise will delete the 
+		stored noise covariance matrix.
+
+		@type  noise: ndarray/bool
+		@param noise: the covariance matrix of the assumed noise or Frue/False
+		"""
+
+		if isinstance(noise, ndarray):
+			if not self._noise:
+				self._noise = True
+
+				# add Gaussian subspace representing noise
+				self.subspaces.insert(0, GSM(self.num_visibles, 1))
+				self.A = hstack([eye(self.num_visibles) / 20., self.A])
+				self.num_hiddens += self.num_visibles
+
+			self.A[:, :self.num_visibles] = cholesky(noise)
+
+		else:
+			if self._noise != noise:
+				self._noise = noise
+				
+				if self._noise:
+					# add Gaussian subspace representing noise
+					self.subspaces.insert(0, GSM(self.num_visibles, 1))
+					self.A = hstack([eye(self.num_visibles) / 20., self.A])
+					self.num_hiddens += self.num_visibles
+
+				else:
+					# remove subspace representing noise
+					self.subspaces.remove(0)
+					self.A = self.A[:, self.num_visibles:]
+					self.num_hiddens -= self.num_visibles

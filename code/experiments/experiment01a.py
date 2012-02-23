@@ -14,43 +14,46 @@ from models import ISA, MoGaussian, StackedModel, ConcatModel, Distribution, GSM
 from transforms import LinearTransform, WhiteningTransform, RadialGaussianization
 from tools import preprocess, Experiment, mapp
 
-mapp.max_processes = 4
+mapp.max_processes = 1
 Distribution.VERBOSITY = 2
 
 from numpy import round, sqrt
 from numpy.linalg import svd
 
-# PS, SS, OC, ND, MI, NS, MC, LS, RG, TP
+# PS, SS, OC, ND, MI, NS, MC, LS, RG, TP, MN
 parameters = [
 	# complete models
-	['8x8',     1, 1, 100,  40, 32,  0, False, False, True],
-	['16x16',   1, 1, 100,  40, 32,  0, False, False, True],
-	['8x8',     2, 1, 100,  40, 32,  0, False, False, True],
-	['16x16',   2, 1, 100,  40, 32,  0, False, False, True],
+	['8x8',     1, 1, 100,  40, 32,  0, False, False, True, False],
+	['16x16',   1, 1, 100,  40, 32,  0, False, False, True, False],
+	['8x8',     2, 1, 100,  40, 32,  0, False, False, True, False],
+	['16x16',   2, 1, 100,  40, 32,  0, False, False, True, False],
 
 	# overcomplete models
-	['8x8',     1, 2, 100, 200, 32,  5, False, False, True],
-	['8x8',     2, 2, 100, 400, 32,  5, False, False, True],
-	['16x16',   1, 2, 100, 200, 32,  5, False, False, True],
+	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, False],
+	['8x8',     2, 2, 100, 400, 32,  5, False, False, True, False],
+	['16x16',   1, 2, 100, 200, 32,  5, False, False, True, False],
+
+	# overcomplete models with noise
+	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, True],
 
 	# overcomplete models with Laplace prior
-	['8x8',     1, 2, 100, 200, 32,  5, False, False, False],
-	['16x16',   1, 2, 100, 200, 32,  5, False, False, False],
+	['8x8',     1, 2, 100, 200, 32,  5, False, False, False, False],
+	['16x16',   1, 2, 100, 200, 32,  5, False, False, False, False],
 
 	# special models
-	['8x8',     1, 2, 100,  80, 32, 20, False, True,  True],
-	['8x8',     1, 2, 100,  80, 32, 20, True,  False, True],
+	['8x8',     1, 2, 100,  80, 32, 20, False, True,  True, False],
+	['8x8',     1, 2, 100,  80, 32, 20, True,  False, True, False],
 ]
 
 def main(argv):
 	if len(argv) < 2:
 		print 'Usage:', argv[0], '<params_id> [experiment]'
 		print
-		print '  {0:>3} {1:>5} {2:>3} {3:>4} {4:>5} {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5}'.format(
-			'ID', 'PS', 'SS', 'OC', 'ND', 'MI', 'NS', 'MC', 'LS', 'RG', 'TP')
+		print '  {0:>3} {1:>5} {2:>3} {3:>4} {4:>5} {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5} {11:>5}'.format(
+			'ID', 'PS', 'SS', 'OC', 'ND', 'MI', 'NS', 'MC', 'LS', 'RG', 'TP', 'MN')
 
 		for id, params in enumerate(parameters):
-			print '  {0:>3} {1:>5} {2:>3} {3:>3}x {4:>4}k {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5}'.format(id, *params)
+			print '  {0:>3} {1:>5} {2:>3} {3:>3}x {4:>4}k {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5} {11:>5}'.format(id, *params)
 
 		print
 		print '  ID = parameter set'
@@ -64,6 +67,7 @@ def main(argv):
 		print '  LS = learn subspace sizes'
 		print '  RG = radially Gaussianize first'
 		print '  TP = optimize marginal distributions'
+		print '  MN = explicitly model Gaussian noise'
 		print
 		print '  If an experiment is specified, it will be used to initialize the model parameters.'
 
@@ -88,7 +92,8 @@ def main(argv):
 	num_steps, \
 	train_subspaces, \
 	radially_gaussianize, \
-	train_prior = parameters[int(argv[1])]
+	train_prior, \
+	noise = parameters[int(argv[1])]
 	num_data = num_data * 1000
 
 	
@@ -106,12 +111,20 @@ def main(argv):
 	# create whitening transform
 	wt = WhiteningTransform(data[1:], symmetric=True)
 
+	if noise:
+		# noise covariance matrix
+		noise = dot(wt.A, wt.A.T) / 20.
+
 
 
 	### MODEL DEFINITION
 
 	# create ISA model
-	isa = ISA(data.shape[0] - 1, (data.shape[0] - 1) * overcompleteness, ssize=ssize)
+	isa = ISA(
+		num_visibles=data.shape[0] - 1, 
+		num_hiddens=(data.shape[0] - 1) * overcompleteness, 
+		ssize=ssize, 
+		noise=noise)
 
 	if ssize == 1:
 		# initialize ISA marginals with Laplace distribution
