@@ -14,7 +14,7 @@ from models import ISA, MoGaussian, StackedModel, ConcatModel, Distribution, GSM
 from transforms import LinearTransform, WhiteningTransform, RadialGaussianization
 from tools import preprocess, Experiment, mapp
 
-mapp.max_processes = 1
+mapp.max_processes = 4
 Distribution.VERBOSITY = 2
 
 from numpy import round, sqrt

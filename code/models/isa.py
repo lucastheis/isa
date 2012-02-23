@@ -1121,10 +1121,15 @@ class ISA(Distribution):
 
 	def orthogonalize(self):
 		"""
-		Symmetrically orthogonalizes the rows of the feature matrix.
+		Symmetrically orthogonalizes the rows of the feature matrix. If additive Gaussian
+		noise is enabled, the columns representing the noise will not be affected.
 		"""
 
-		self.A = dot(sqrtmi(dot(self.A, self.A.T)), self.A)
+		if self.noise:
+			A = self.A[:, num_visibles:]
+			self.A[:, num_visibles:] = dot(sqrtmi(dot(A, A.T)), A)
+		else:
+			self.A = dot(sqrtmi(dot(self.A, self.A.T)), self.A)
 
 	
 
@@ -1141,8 +1146,8 @@ class ISA(Distribution):
 	@noise.setter
 	def noise(self, noise):
 		"""
-		Enables or disables the Gaussian noise. Disabling the noise will delete the 
-		stored noise covariance matrix.
+		Enables or disables additive Gaussian noise. Disabling the noise will
+		delete the stored noise covariance matrix.
 
 		@type  noise: ndarray/bool
 		@param noise: the covariance matrix of the assumed noise or Frue/False
