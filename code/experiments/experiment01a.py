@@ -121,10 +121,10 @@ def main(argv):
 
 	# create ISA model
 	isa = ISA(
-		num_visibles=data.shape[0] - 1, 
-		num_hiddens=(data.shape[0] - 1) * overcompleteness, 
-		ssize=ssize, 
-		noise=noise)
+		num_visibles=data.shape[0] - 1,
+		num_hiddens=(data.shape[0] - 1) * overcompleteness,
+		ssize=ssize,
+		noise=False)
 
 	if ssize == 1:
 		# initialize ISA marginals with Laplace distribution
@@ -200,6 +200,9 @@ def main(argv):
 	# turn off regularization
 	for gsm in model[1].model.subspaces:
 		gsm.gamma = 0.
+
+	# turn on additive Gaussian noise
+	model.noise = noise
 
 	# train using SGD with regularization turned off
 	model.train(data[:, :20000], 1,

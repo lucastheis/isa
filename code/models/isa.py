@@ -12,7 +12,7 @@ from numpy import min, max, round
 from numpy.random import randint, randn, rand, logseries, permutation
 from numpy.linalg import svd, pinv, inv, det, slogdet, cholesky
 from scipy.linalg import solve
-from scipy.optimize import fmin_l_bfgs_b
+from scipy.optimize import fmin_l_bfgs_b, fmin_cg
 from scipy.stats import laplace, t
 from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi
 from gsm import GSM
@@ -534,6 +534,88 @@ class ISA(Distribution):
 
 
 
+	def train_of(self, X, **kwargs):
+		"""
+		An implementation of Olshausen & Field's sparse coding algorithm.
+
+		B{References:}
+			- Olshausen, B. A. and Field, D. J. (1996). I{Emergence of simple-cell receptive field
+			  properties by learning a sparse code for natural images}
+		"""
+
+		max_iter = kwargs.get('max_iter', 10)
+		batch_size = kwargs.get('batch_size', 100)
+		step_width = kwargs.get('step_width', 0.1)
+		momentum = kwargs.get('momentum', 0.9)
+		shuffle = kwargs.get('shuffle', True)
+		noise_var = kwargs.get('noise', 0.01)
+		alpha = kwargs.get('alpha', 0.02)
+		beta = kwargs.get('beta', 0.1)
+
+		# estimated variance for each component
+		Y_var = ones([1, self.num_hiddens])
+		gain = ones([1, self.num_hiddens])
+
+		# initial momentum
+		P = 0.
+
+		def f(y, i):
+			return sum(square(X[:, i] - dot(self.A, y)), 0) / (2. * noise_var) + sum(abs(y) / 4., 0)
+
+		def df(y, i):
+			return dot(self.A.T, dot(self.A, y) - X[:, i]) / noise_var + sign(y) / 4.
+
+		def compute_map(X):
+			"""
+			Computes the MAP for Laplacian prior and Gaussian additive noise.
+			"""
+
+			# initial nullspace state
+			Y = asshmarray(dot(self.A.T, X))
+
+			def parfor(i):
+				Y[:, i] = fmin_cg(f, Y[:, i], df, (i,), disp=False, maxiter=1000)
+			mapp(parfor, range(X.shape[1]))
+
+			return Y
+
+		from tools import patchutil
+		from matplotlib.pyplot import clf, draw, figure, show, savefig, axis
+
+		for _ in range(max_iter):
+			if shuffle:
+				# randomize order of data
+				X = X[:, permutation(X.shape[1])]
+
+			for b in range(0, X.shape[1], batch_size):
+				print b / float(X.shape[1])
+				batch = X[:, b:b + batch_size]
+
+				if not batch.shape[1] < batch_size:
+					Y = compute_map(batch)
+
+					# residuals
+					R = batch - dot(self.A, Y)
+
+					# calculate gradient
+					P = momentum * P + dot(R, Y.T) / batch_size
+
+					# update basis
+					self.A += step_width * P
+
+					# normalize basis
+					Y_var = (1. - beta) * Y_var + beta * mean(square(Y), 1)
+					gain *= power(Y_var, alpha).reshape(1, -1)
+					self.A = self.A / sqrt(sum(square(self.A), 0)) * gain
+
+					if not mod(b, 4):
+						clf()
+						patchutil.show(self.A.T.reshape(-1, 8, 8))
+						axis('equal')
+						savefig('basis.png')
+			
+
+
 	def sample(self, num_samples=1):
 		"""
 		Draw samples from the model.
@@ -896,7 +978,7 @@ class ISA(Distribution):
 			# final half-step
 			P -= lf_step_size_rnd / 2. * dot(B, self.prior_energy_gradient(Y))
 
-			# make sure hidden and visible state stay consistent
+			# make sure hidden and visible states stay consistent
 			Y = WX + dot(BB, Y)
 
 			# new Hamiltonian
@@ -950,6 +1032,34 @@ class ISA(Distribution):
 					mean(self.prior_energy(WX + dot(B.T, Z))), 1. - mean(reject))
 
 		return WX + dot(B.T, Z)
+
+
+
+	def compute_map(self, X, **kwargs):
+		"""
+		Try to find the MAP of the posterior using conjugate gradient descent.
+		If the posterior is multimodal, a local optimum will be found.
+		"""
+
+		W = pinv(self.A)
+		V = svd(W)[0][:, self.num_visibles:]
+
+		WX = dot(W, X)
+
+		def f(z, i):
+			return self.prior_energy(WX[:, [i]] + dot(V, z.reshape(-1, 1))).flatten()
+
+		def df(z, i):
+			return dot(V.T, self.prior_energy_gradient(WX[:, [i]] + dot(V, z.reshape(-1, 1)))).flatten()
+
+		# initial nullspace state
+		Z = asshmarray(zeros([self.num_hiddens - self.num_visibles, X.shape[1]]))
+
+		def parfor(i):
+			Z[:, i] = fmin_cg(f, Z[:, i], df, (i,), disp=False)
+		map(parfor, range(X.shape[1]))
+
+		return WX + dot(V, Z)
 			
 			
 
