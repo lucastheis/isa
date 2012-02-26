@@ -17,6 +17,8 @@ class WhiteningTransform(LinearTransform):
 		low-dimensional manifold stays a low-dimensional manifold after
 		transformation.
 
+		This whitening transform does not remove the mean of the data.
+
 		@type  data: array_like
 		@param data: data used to compute covariance matrix
 
