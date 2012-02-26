@@ -16,15 +16,15 @@ def main(argv):
 
 	images = loadmat('data/IMAGES.mat')['IMAGES']
 
-	samples = []
+	data = []
 
 	for i in range(images.shape[2]):
-		patches = patchutil.sample(images[:, :, i], patch_size, 10000)
-		patches = patches.reshape(prod(patch_size), -1)
-		samples.append(patches)
+		samples = patchutil.sample(images[:, :, i], patch_size, 10000)
+		samples = samples.reshape(-1, prod(patch_size)).T
+		data.append(samples)
 
-	samples = hstack(samples)
-	savez('data/of.{0}x{1}.npz'.format(*patch_size))
+	data = hstack(data)
+	savez('data/of.{0}x{1}.npz'.format(*patch_size), data=data)
 
 	return 0
 

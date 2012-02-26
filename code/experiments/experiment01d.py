@@ -22,6 +22,7 @@ def main(argv):
 	A = dot(dct.A[1:].T, wt.inverse(m[1].model.A))
 	A_white = dot(dct.A[1:].T, m[1].model.A)
 
+	print m[1].model.A.shape
 	if '_noise' in m[1].model.__dict__:
 		if m[1].model.noise:
 			A = A[:, m[1].model.num_visibles:]

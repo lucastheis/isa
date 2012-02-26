@@ -545,15 +545,19 @@ class ISA(Distribution):
 
 		max_iter = kwargs.get('max_iter', 10)
 		batch_size = kwargs.get('batch_size', 100)
-		step_width = kwargs.get('step_width', 1.0)
-		momentum = kwargs.get('momentum', 0.5)
+		step_width = kwargs.get('step_width', 1.)
+		momentum = kwargs.get('momentum', 0.)
 		shuffle = kwargs.get('shuffle', True)
 		noise_var = kwargs.get('noise_var', 0.1)
 		alpha = kwargs.get('alpha', 0.02)
-		beta = kwargs.get('beta', 0.1)
+		var_eta = kwargs.get('var_eta', 0.1)
+		var_goal = kwargs.get('var_goal', 0.1)
+		beta = 2.2
+		sigma = 0.316
+		tol = 1E-2
 
 		# estimated variance for each component
-		Y_var = ones([1, self.num_hiddens])
+		Y_var = ones([1, self.num_hiddens]) * var_goal
 		gain = ones([1, self.num_hiddens])
 
 		# initial momentum
@@ -568,28 +572,32 @@ class ISA(Distribution):
 			Ax = dot(self.A.T, X_)
 
 			def f(y, i):
-				return sum(square(X_[:, [i]] - dot(self.A, y.reshape(-1, 1)))) / (2. * noise_var) + sum(abs(y)) / 0.7071
+				y = y.reshape(-1, 1)
+				return sum(square(X_[:, [i]] - dot(self.A, y))) / (2. * noise_var) + beta * sum(log(1. + square(y / sigma)))
 
 			def df(y, i):
-				grad = (dot(AA, y.reshape(-1, 1)) - Ax[:, [i]]) / noise_var + sign(y.reshape(-1, 1)) / 0.7071
+				y = y.reshape(-1, 1)
+				grad = (dot(AA, y) - Ax[:, [i]]) / noise_var + (2. * beta / sigma**2) * y / (1. + square(y / sigma))
 				return grad.flatten()
 
-			# initial hidden state
-			Y = asshmarray(dot(self.A.T, X_))
+			# initial hidden states
+			Y = asshmarray(dot(self.A.T, X_) / sum(square(self.A), 0).reshape(-1, 1))
 
 #			print check_grad(f, df, Y[:, 0], 0) / sqrt(sum(square(df(Y[:, 0], 0))))
 #			print check_grad(f, df, Y[:, 1], 1) / sqrt(sum(square(df(Y[:, 1], 1))))
 #			print check_grad(f, df, Y[:, 2], 2) / sqrt(sum(square(df(Y[:, 2], 2))))
 #			print check_grad(f, df, Y[:, 3], 3) / sqrt(sum(square(df(Y[:, 3], 3))))
-
+#
 			def parfor(i):
-				Y[:, i] = fmin_cg(f, Y[:, i], df, (i,), disp=False, maxiter=100, gtol=1e-3)
+				Y[:, i] = fmin_cg(f, Y[:, i], df, (i,), disp=False, maxiter=100, gtol=1e-2)
 			mapp(parfor, range(X_.shape[1]))
 
 			return Y
 
 		from tools import patchutil
 		from matplotlib.pyplot import clf, draw, figure, show, savefig, axis
+
+		self.A = self.A / sqrt(sum(square(self.A), 0))
 
 		for _ in range(max_iter):
 			if shuffle:
@@ -609,13 +617,13 @@ class ISA(Distribution):
 					self.A += step_width * P
 
 					# normalize basis
-					Y_var = (1. - beta) * Y_var + beta * mean(square(Y), 1)
-					gain *= power(Y_var, alpha).reshape(1, -1)
+					Y_var = (1. - var_eta) * Y_var + var_eta * mean(square(Y), 1)
+					gain *= power(Y_var / var_goal, alpha).reshape(1, -1)
 					self.A = self.A / sqrt(sum(square(self.A), 0)) * gain
 
 					print '{0:.4f} {1:.4f} {2:.4f}'.format(float(min(Y_var)), float(mean(Y_var)), float(max(Y_var)))
 
-					if not b / batch_size % 5:
+					if not b / batch_size % 10:
 						clf()
 						patchutil.show(self.A.T.reshape(-1, 8, 8))
 						axis('equal')
