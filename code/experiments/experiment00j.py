@@ -10,6 +10,7 @@ from models import ISA
 from transforms import WhiteningTransform
 from tools import preprocess
 from numpy import load
+from numpy.random import *
 
 def main(argv):
 	# load data, log-transform and center data
@@ -23,8 +24,10 @@ def main(argv):
 
 	isa = ISA(
 		num_visibles=data.shape[0],
-		num_hiddens=2 * data.shape[0],
+		num_hiddens=1 * data.shape[0],
 		ssize=1)
+	isa.A = rand(*isa.A.shape) - 0.5
+	isa.orthogonalize()
 
 	isa.train_of(data)
 

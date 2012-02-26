@@ -12,7 +12,7 @@ from numpy import min, max, round
 from numpy.random import randint, randn, rand, logseries, permutation
 from numpy.linalg import svd, pinv, inv, det, slogdet, cholesky
 from scipy.linalg import solve
-from scipy.optimize import fmin_l_bfgs_b, fmin_cg
+from scipy.optimize import fmin_l_bfgs_b, fmin_cg, check_grad
 from scipy.stats import laplace, t
 from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi
 from gsm import GSM
@@ -545,10 +545,10 @@ class ISA(Distribution):
 
 		max_iter = kwargs.get('max_iter', 10)
 		batch_size = kwargs.get('batch_size', 100)
-		step_width = kwargs.get('step_width', 0.1)
-		momentum = kwargs.get('momentum', 0.9)
+		step_width = kwargs.get('step_width', 1.0)
+		momentum = kwargs.get('momentum', 0.5)
 		shuffle = kwargs.get('shuffle', True)
-		noise_var = kwargs.get('noise', 0.01)
+		noise_var = kwargs.get('noise_var', 0.1)
 		alpha = kwargs.get('alpha', 0.02)
 		beta = kwargs.get('beta', 0.1)
 
@@ -559,23 +559,32 @@ class ISA(Distribution):
 		# initial momentum
 		P = 0.
 
-		def f(y, i):
-			return sum(square(X[:, i] - dot(self.A, y)), 0) / (2. * noise_var) + sum(abs(y) / 4., 0)
-
-		def df(y, i):
-			return dot(self.A.T, dot(self.A, y) - X[:, i]) / noise_var + sign(y) / 4.
-
-		def compute_map(X):
+		def compute_map(X_):
 			"""
 			Computes the MAP for Laplacian prior and Gaussian additive noise.
 			"""
 
-			# initial nullspace state
-			Y = asshmarray(dot(self.A.T, X))
+			AA = dot(self.A.T, self.A)
+			Ax = dot(self.A.T, X_)
+
+			def f(y, i):
+				return sum(square(X_[:, [i]] - dot(self.A, y.reshape(-1, 1)))) / (2. * noise_var) + sum(abs(y)) / 0.7071
+
+			def df(y, i):
+				grad = (dot(AA, y.reshape(-1, 1)) - Ax[:, [i]]) / noise_var + sign(y.reshape(-1, 1)) / 0.7071
+				return grad.flatten()
+
+			# initial hidden state
+			Y = asshmarray(dot(self.A.T, X_))
+
+#			print check_grad(f, df, Y[:, 0], 0) / sqrt(sum(square(df(Y[:, 0], 0))))
+#			print check_grad(f, df, Y[:, 1], 1) / sqrt(sum(square(df(Y[:, 1], 1))))
+#			print check_grad(f, df, Y[:, 2], 2) / sqrt(sum(square(df(Y[:, 2], 2))))
+#			print check_grad(f, df, Y[:, 3], 3) / sqrt(sum(square(df(Y[:, 3], 3))))
 
 			def parfor(i):
-				Y[:, i] = fmin_cg(f, Y[:, i], df, (i,), disp=False, maxiter=1000)
-			mapp(parfor, range(X.shape[1]))
+				Y[:, i] = fmin_cg(f, Y[:, i], df, (i,), disp=False, maxiter=100, gtol=1e-3)
+			mapp(parfor, range(X_.shape[1]))
 
 			return Y
 
@@ -588,19 +597,15 @@ class ISA(Distribution):
 				X = X[:, permutation(X.shape[1])]
 
 			for b in range(0, X.shape[1], batch_size):
-				print b / float(X.shape[1])
+				print b / batch_size
+
 				batch = X[:, b:b + batch_size]
 
 				if not batch.shape[1] < batch_size:
 					Y = compute_map(batch)
 
-					# residuals
-					R = batch - dot(self.A, Y)
-
-					# calculate gradient
-					P = momentum * P + dot(R, Y.T) / batch_size
-
-					# update basis
+					# calculate gradient and update basis
+					P = momentum * P + dot(batch - dot(self.A, Y), Y.T) / batch_size
 					self.A += step_width * P
 
 					# normalize basis
@@ -608,11 +613,13 @@ class ISA(Distribution):
 					gain *= power(Y_var, alpha).reshape(1, -1)
 					self.A = self.A / sqrt(sum(square(self.A), 0)) * gain
 
-					if not mod(b, 4):
+					print '{0:.4f} {1:.4f} {2:.4f}'.format(float(min(Y_var)), float(mean(Y_var)), float(max(Y_var)))
+
+					if not b / batch_size % 5:
 						clf()
 						patchutil.show(self.A.T.reshape(-1, 8, 8))
 						axis('equal')
-						savefig('basis.png')
+						savefig('bases/basis.{0}.png'.format(b / batch_size))
 			
 
 
