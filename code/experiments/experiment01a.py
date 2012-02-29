@@ -133,13 +133,19 @@ def main(argv):
 	if len(argv) > 2:
 		# initialize ISA model with already trained model
 		results = Experiment(argv[2])
+		
+		model_ = results['model'] if isinstance(results['model'], ISA) \
+			else results['model'][1].model
 
-		if results['model'][1].model.num_hiddens != isa.num_hiddens or \
-		   results['model'][1].model.num_visibles != isa.num_visibles:
+		if model_.num_hiddens != isa.num_hiddens or \
+		   model_.num_visibles != isa.num_visibles:
 			raise ValueError('Specified model for initialization is incompatible with chosen parameters.')
 
-		isa.A = results['model'][1].model.A
-		isa.subspaces = results['model'][1].model.subspaces
+		isa.A = model_.A
+		isa.subspaces = model_.subspaces
+
+		# free memory
+		del model_
 
 
 

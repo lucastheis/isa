@@ -14,7 +14,7 @@ from numpy.linalg import svd, pinv, inv, det, slogdet, cholesky
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b, fmin_cg, check_grad
 from scipy.stats import laplace, t
-from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi
+from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi, sqrtm
 from gsm import GSM
 from copy import deepcopy
 
@@ -484,48 +484,85 @@ class ISA(Distribution):
 		momentum = kwargs.get('momentum', 0.9)
 		shuffle = kwargs.get('shuffle', True)
 		pocket = kwargs.get('pocket', shuffle)
+		train_noise = kwargs.get('train_noise', True)
 
-		# nullspace basis
-		B = self.nullspace_basis()
-		
-		# completed basis and filters
-		A = vstack([self.A, B])
-		W = inv(A)
+		if self.noise:
+			# reconstruct data points
+			X = dot(self.A, Y)
 
-		# completed data
-		X = dot(A, Y)
+			# remove noise components
+			Y = Y[self.num_visibles:, :]
+			A = self.A[:, self.num_visibles:]
+			B = self.A[:, :self.num_visibles]
+			S = inv(dot(B, B.T))
 
-		# initial direction of momentum
-		P = 0.
+			# initial direction of momentum
+			P = 0.
 
-		if pocket:
-			energy = mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
+			if pocket:
+				energy = sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0)) - slogdet(S)[1]
 
-		for j in range(max_iter):
-			if shuffle:
-				# randomize order of data
-				X = X[:, permutation(X.shape[1])]
+			for j in range(max_iter):
+				if shuffle:
+					# randomize order of data
+					indices = permutation(X.shape[1])
+					X = X[:, indices]
+					Y = Y[:, indices]
 
-			for i in range(0, X.shape[1], batch_size):
-				batch = X[:, i:i + batch_size]
+				for i in range(0, X.shape[1], batch_size):
+					# batches
+					X_ = X[:, i:i + batch_size]
+					Y_ = Y[:, i:i + batch_size]
 
-				if not batch.shape[1] < batch_size:
-					# calculate gradient
-					P = momentum * P + A.T - \
-						dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size
+					P = momentum * P + dot(S, dot(X_ - dot(A, Y_), Y_.T)) / batch_size
+					A += step_width * P
 
-					# update parameters
-					W += step_width * P
-					A = inv(W)
+			if self.train_noise:
+				# update noise covariance
+				self.A[:, :self.num_visibles] = sqrtm(cov(X - dot(A, Y)))
 
-		if pocket:
-			# test for improvement of lower bound
-			if mean(self.prior_energy(dot(W, X))) - slogdet(W)[1] > energy:
-				if Distribution.VERBOSITY > 0:
-					print 'No improvement.'
+		else:
+			# nullspace basis
+			B = self.nullspace_basis()
+			
+			# completed basis and filters
+			A = vstack([self.A, B])
+			W = inv(A)
 
-				# don't update parameters
-				return False
+			# completed data
+			X = dot(A, Y)
+
+			# initial direction of momentum
+			P = 0.
+
+			if pocket:
+				energy = mean(self.prior_energy(Y)) - slogdet(W)[1]
+
+			for j in range(max_iter):
+				if shuffle:
+					# randomize order of data
+					X = X[:, permutation(X.shape[1])]
+
+				for i in range(0, X.shape[1], batch_size):
+					batch = X[:, i:i + batch_size]
+
+					if not batch.shape[1] < batch_size:
+						# calculate gradient
+						P = momentum * P + A.T - \
+							dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size
+
+						# update parameters
+						W += step_width * P
+						A = inv(W)
+
+			if pocket:
+				# test for improvement of lower bound
+				if mean(self.prior_energy(dot(W, X))) - slogdet(W)[1] > energy:
+					if Distribution.VERBOSITY > 0:
+						print 'No improvement.'
+
+					# don't update parameters
+					return False
 
 		# update linear features
 		self.A = A[:self.A.shape[0]]
@@ -548,13 +585,13 @@ class ISA(Distribution):
 		step_width = kwargs.get('step_width', 1.)
 		momentum = kwargs.get('momentum', 0.)
 		shuffle = kwargs.get('shuffle', True)
-		noise_var = kwargs.get('noise_var', 0.1)
+		noise_var = kwargs.get('noise_var', 0.005)
 		alpha = kwargs.get('alpha', 0.02)
-		var_eta = kwargs.get('var_eta', 0.1)
+		var_eta = kwargs.get('var_eta', 0.01)
 		var_goal = kwargs.get('var_goal', 0.1)
-		beta = 2.2
-		sigma = 0.316
-		tol = 1E-2
+		beta = kwargs.get('beta', 1.2)
+		sigma = kwargs.get('sigma', 0.07)
+		tol = kwargs.get('tol', 0.01)
 
 		# estimated variance for each component
 		Y_var = ones([1, self.num_hiddens]) * var_goal
@@ -1287,7 +1324,7 @@ class ISA(Distribution):
 				self.A = hstack([eye(self.num_visibles) / 20., self.A])
 				self.num_hiddens += self.num_visibles
 
-			self.A[:, :self.num_visibles] = cholesky(noise)
+			self.A[:, :self.num_visibles] = sqrtm(noise)
 
 		else:
 			if self._noise != noise:
