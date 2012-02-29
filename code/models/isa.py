@@ -500,7 +500,7 @@ class ISA(Distribution):
 			P = 0.
 
 			if pocket:
-				energy = sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0)) - slogdet(S)[1]
+				energy = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) - slogdet(S)[1]
 
 			for j in range(max_iter):
 				if shuffle:
@@ -517,9 +517,24 @@ class ISA(Distribution):
 					P = momentum * P + dot(S, dot(X_ - dot(A, Y_), Y_.T)) / batch_size
 					A += step_width * P
 
+			# estimate noise covariance
+			C = cov(X - dot(A, Y))
+			B = sqrtm(C)
+
+			if pocket:
+				energy_ = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) + slogdet(C)[1]
+
+				# test for improvement of lower bound
+				if energy_ > energy:
+					if Distribution.VERBOSITY > 0:
+						print 'No improvement.'
+
+					# don't update parameters
+					return False
+
 			if self.train_noise:
-				# update noise covariance
-				self.A[:, :self.num_visibles] = sqrtm(cov(X - dot(A, Y)))
+				self.A[:, :self.num_visibles] = B
+			self.A[:, self.num_visibles:] = A
 
 		else:
 			# nullspace basis
@@ -564,8 +579,8 @@ class ISA(Distribution):
 					# don't update parameters
 					return False
 
-		# update linear features
-		self.A = A[:self.A.shape[0]]
+			# update linear features
+			self.A = A[:self.A.shape[0]]
 
 		return True
 
