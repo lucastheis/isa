@@ -20,11 +20,11 @@ def main(argv):
 
 		dct, wt = e['transforms']
 
-		A = dot(dct.A[1:].T, wt.inverse(m[1].model.A))
-		A_white = dot(dct.A[1:].T, m[1].model.A)
+		A = dot(dct.A[1:].T, wt.inverse(m.A))
+		A_white = dot(dct.A[1:].T, m.A)
 
 		print m.A.shape
-		if '_noise' in m[1].model.__dict__:
+		if '_noise' in m.__dict__:
 			if m.noise:
 				A = A[:, m.num_visibles:]
 				L = A_white[:, :m.num_visibles]
@@ -32,6 +32,7 @@ def main(argv):
 
 		if '_noise' in m.__dict__:
 			if m.noise:
+				patch_size = int(sqrt(A.shape[0]) + 0.5)
 				figure()
 				patchutil.show(L.T.reshape(-1, patch_size, patch_size))
 
@@ -52,7 +53,7 @@ def main(argv):
 	patch_size = int(sqrt(A.shape[0]) + 0.5)
 
 	figure()
-	patchutil.show(A.T.reshape(-1, patch_size, patch_size), num_rows=patch_size)
+	patchutil.show(A.T.reshape(-1, patch_size, patch_size))
 
 	figure()
 	patchutil.show(A_white.T.reshape(-1, patch_size, patch_size))

@@ -61,5 +61,17 @@ class Tests(unittest.TestCase):
 
 
 
+	def test_compute_map(self):
+		isa = ISA(2, 4)
+
+		X = isa.sample(100)
+
+		M = isa.compute_map(X, tol=1E-4, maxiter=1000)
+		Y = isa.sample_posterior(X)
+
+		self.assertTrue(all(isa.prior_energy(M) <= isa.prior_energy(Y)))
+
+
+
 if __name__ == '__main__':
 	unittest.main()

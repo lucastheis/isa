@@ -487,6 +487,7 @@ class ISA(Distribution):
 		train_noise = kwargs.get('train_noise', True)
 
 		if self.noise:
+			print 'SGD with NOISE'
 			# reconstruct data points
 			X = dot(self.A, Y)
 
@@ -502,7 +503,7 @@ class ISA(Distribution):
 			if pocket:
 				energy = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) - slogdet(S)[1]
 
-			for j in range(max_iter):
+			for _ in range(max_iter):
 				if shuffle:
 					# randomize order of data
 					indices = permutation(X.shape[1])
@@ -517,9 +518,12 @@ class ISA(Distribution):
 					P = momentum * P + dot(S, dot(X_ - dot(A, Y_), Y_.T)) / batch_size
 					A += step_width * P
 
-			# estimate noise covariance
-			C = cov(X - dot(A, Y))
-			B = sqrtm(C)
+			if train_noise:
+				# estimate noise covariance
+				C = cov(X - dot(A, Y))
+				B = sqrtm(C)
+			else:
+				C = dot(B, B.T)
 
 			if pocket:
 				energy_ = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) + slogdet(C)[1]
@@ -532,9 +536,11 @@ class ISA(Distribution):
 					# don't update parameters
 					return False
 
-			if self.train_noise:
+			if train_noise:
 				self.A[:, :self.num_visibles] = B
 			self.A[:, self.num_visibles:] = A
+
+			print '[DONE]'
 
 		else:
 			# nullspace basis
@@ -615,17 +621,17 @@ class ISA(Distribution):
 		# initial momentum
 		P = 0.
 
-		def compute_map(X_):
+		def compute_map(X):
 			"""
 			Computes the MAP for Laplacian prior and Gaussian additive noise.
 			"""
 
 			AA = dot(self.A.T, self.A)
-			Ax = dot(self.A.T, X_)
+			Ax = dot(self.A.T, X)
 
 			def f(y, i):
 				y = y.reshape(-1, 1)
-				return sum(square(X_[:, [i]] - dot(self.A, y))) / (2. * noise_var) + beta * sum(log(1. + square(y / sigma)))
+				return sum(square(X[:, [i]] - dot(self.A, y))) / (2. * noise_var) + beta * sum(log(1. + square(y / sigma)))
 
 			def df(y, i):
 				y = y.reshape(-1, 1)
@@ -633,32 +639,22 @@ class ISA(Distribution):
 				return grad.flatten()
 
 			# initial hidden states
-			Y = asshmarray(dot(self.A.T, X_) / sum(square(self.A), 0).reshape(-1, 1))
+			Y = asshmarray(dot(self.A.T, X) / sum(square(self.A), 0).reshape(-1, 1))
 
-#			print check_grad(f, df, Y[:, 0], 0) / sqrt(sum(square(df(Y[:, 0], 0))))
-#			print check_grad(f, df, Y[:, 1], 1) / sqrt(sum(square(df(Y[:, 1], 1))))
-#			print check_grad(f, df, Y[:, 2], 2) / sqrt(sum(square(df(Y[:, 2], 2))))
-#			print check_grad(f, df, Y[:, 3], 3) / sqrt(sum(square(df(Y[:, 3], 3))))
-#
 			def parfor(i):
-				Y[:, i] = fmin_cg(f, Y[:, i], df, (i,), disp=False, maxiter=100, gtol=1e-2)
-			mapp(parfor, range(X_.shape[1]))
+				Y[:, i] = fmin_cg(f, Y[:, i], df, (i,), disp=False, maxiter=100, gtol=tol)
+			mapp(parfor, range(X.shape[1]))
 
 			return Y
 
-		from tools import patchutil
-		from matplotlib.pyplot import clf, draw, figure, show, savefig, axis
-
 		self.A = self.A / sqrt(sum(square(self.A), 0))
 
-		for _ in range(max_iter):
+		for i in range(max_iter):
 			if shuffle:
 				# randomize order of data
 				X = X[:, permutation(X.shape[1])]
 
 			for b in range(0, X.shape[1], batch_size):
-				print b / batch_size
-
 				batch = X[:, b:b + batch_size]
 
 				if not batch.shape[1] < batch_size:
@@ -673,13 +669,10 @@ class ISA(Distribution):
 					gain *= power(Y_var / var_goal, alpha).reshape(1, -1)
 					self.A = self.A / sqrt(sum(square(self.A), 0)) * gain
 
-					print '{0:.4f} {1:.4f} {2:.4f}'.format(float(min(Y_var)), float(mean(Y_var)), float(max(Y_var)))
-
-					if not b / batch_size % 10:
-						clf()
-						patchutil.show(self.A.T.reshape(-1, 8, 8))
-						axis('equal')
-						savefig('bases/basis.{0}.png'.format(b / batch_size))
+					if self.VERBOSITY > 0:
+						print 'epoch {0}, batch {1}'.format(i, b / batch_size)
+						print '{0:.4f} {1:.4f} {2:.4f}'.format(
+							float(min(Y_var)), float(mean(Y_var)), float(max(Y_var)))
 			
 
 
@@ -1102,7 +1095,7 @@ class ISA(Distribution):
 
 
 
-	def compute_map(self, X, **kwargs):
+	def compute_map(self, X, tol=1E-3, maxiter=1000):
 		"""
 		Try to find the MAP of the posterior using conjugate gradient descent.
 		If the posterior is multimodal, a local optimum will be found.
@@ -1123,7 +1116,7 @@ class ISA(Distribution):
 		Z = asshmarray(zeros([self.num_hiddens - self.num_visibles, X.shape[1]]))
 
 		def parfor(i):
-			Z[:, i] = fmin_cg(f, Z[:, i], df, (i,), disp=False)
+			Z[:, i] = fmin_cg(f, Z[:, i], df, (i,), disp=False, maxiter=maxiter, gtol=tol)
 		map(parfor, range(X.shape[1]))
 
 		return WX + dot(V, Z)
