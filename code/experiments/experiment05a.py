@@ -11,10 +11,23 @@ from models import GSM, ISA, StackedModel
 from transforms import LinearTransform, WhiteningTransform
 from transforms import SubspaceGaussianization, RadialGaussianization
 
+from numpy import dot, min, max
+from numpy.linalg import pinv
+
+
+
+def reconstruct(images, wt, rg):
+	images = dot(pinv(wt.A[:1024]), rg.inverse(images))
+	images = images.T.reshape(-1, 32, 32, 3)
+	return images
+
+
+
 def main(argv):
 	experiment = Experiment()
 
-	data = cifar.load([1, 2, 3, 4, 5])[0]
+#	data = cifar.load([1, 2, 3, 4, 5])[0]
+	data = cifar.load([1, 2])[0]
 	data = cifar.preprocess(data)
 
 	# apply PCA whitening and reduce dimensionality
@@ -30,6 +43,17 @@ def main(argv):
 	data = rg(data)
 
 	transforms = [wt, rg]
+
+	from matplotlib.pyplot import imshow, show, clf
+	images = reconstruct(data[:, :100], wt, rg)
+	images = (images - min(images)) / (max(images) - min(images))
+	for i in range(20):
+		print i
+		clf()
+		imshow(images[i], interpolation='nearest')
+		show()
+
+	return 0
 
 	for _ in range(2):
 		isa = ISA(data.shape[0])
@@ -49,9 +73,9 @@ def main(argv):
 
 		transforms.append(sg)
 
-	experiment['transforms'] = transforms
-	experiment['model'] = isa
-	experiment.save('results/experiment05a/experiment05a.{0}.{1}.xpck')
+		experiment['transforms'] = transforms
+		experiment['model'] = isa
+		experiment.save('results/experiment05a/experiment05a.{0}.{1}.xpck')
 
 	return 0
 

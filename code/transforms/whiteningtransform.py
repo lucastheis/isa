@@ -26,7 +26,7 @@ class WhiteningTransform(LinearTransform):
 		@param symmetric: if true, perform symmetric whitening
 
 		@type  tol: float
-		@param tol: directions with eigenvalues smaller than C{tol} get ignored
+		@param tol: directions with eigenvalues smaller than C{tol} will be ignored
 		"""
 
 		self.symmetric = symmetric
@@ -60,6 +60,6 @@ class WhiteningTransform(LinearTransform):
 			eigvals[eigvals <= tol] = 1.
 
 			# whitening matrix
-			whitening_matrix = dot(eigvecs, dot(diag(1. / sqrt(eigvals)), eigvecs.T))
+			whitening_matrix = dot(diag(1. / sqrt(eigvals)), eigvecs.T)
 
 		LinearTransform.__init__(self, whitening_matrix)
