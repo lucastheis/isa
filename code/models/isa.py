@@ -487,7 +487,6 @@ class ISA(Distribution):
 		train_noise = kwargs.get('train_noise', True)
 
 		if self.noise:
-			print 'SGD with NOISE'
 			# reconstruct data points
 			X = dot(self.A, Y)
 
@@ -539,8 +538,6 @@ class ISA(Distribution):
 			if train_noise:
 				self.A[:, :self.num_visibles] = B
 			self.A[:, self.num_visibles:] = A
-
-			print '[DONE]'
 
 		else:
 			# nullspace basis
@@ -1296,8 +1293,8 @@ class ISA(Distribution):
 		"""
 
 		if self.noise:
-			A = self.A[:, num_visibles:]
-			self.A[:, num_visibles:] = dot(sqrtmi(dot(A, A.T)), A)
+			A = self.A[:, self.num_visibles:]
+			self.A[:, self.num_visibles:] = dot(sqrtmi(dot(A, A.T)), A)
 		else:
 			self.A = dot(sqrtmi(dot(self.A, self.A.T)), self.A)
 

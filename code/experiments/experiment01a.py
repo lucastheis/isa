@@ -20,40 +20,41 @@ Distribution.VERBOSITY = 2
 from numpy import round, sqrt
 from numpy.linalg import svd
 
-# PS, SS, OC, ND, MI, NS, MC, LS, RG, TP, MN
+# PS, SS, OC, ND, MI, NS, MC, LS, RG, TP, MN, SC
 parameters = [
 	# complete models
-	['8x8',     1, 1, 100,  40, 32,  0, False, False, True, False],
-	['16x16',   1, 1, 100,  40, 32,  0, False, False, True, False],
-	['8x8',     2, 1, 100,  40, 32,  0, False, False, True, False],
-	['16x16',   2, 1, 100,  40, 32,  0, False, False, True, False],
+	['8x8',     1, 1, 100,  40, 32,  0, False, False, True, False, False],
+	['16x16',   1, 1, 100,  40, 32,  0, False, False, True, False, False],
+	['8x8',     2, 1, 100,  40, 32,  0, False, False, True, False, False],
+	['16x16',   2, 1, 100,  40, 32,  0, False, False, True, False, False],
 
 	# overcomplete models
-	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, False],
-	['8x8',     2, 2, 100, 400, 32,  5, False, False, True, False],
-	['16x16',   1, 2, 100, 200, 32,  5, False, False, True, False],
+	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, False, False],
+	['8x8',     2, 2, 100, 400, 32,  5, False, False, True, False, False],
+	['16x16',   1, 2, 100, 200, 32,  5, False, False, True, False, False],
 
 	# overcomplete models with noise
-	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, True],
+	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, True, False],
+	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, True, True],
 
 	# overcomplete models with Laplace prior
-	['8x8',     1, 2, 100, 200, 32,  5, False, False, False, False],
-	['16x16',   1, 2, 100, 200, 32,  5, False, False, False, False],
+	['8x8',     1, 2, 100, 200, 32,  5, False, False, False, False, False],
+	['16x16',   1, 2, 100, 200, 32,  5, False, False, False, False, False],
 
 	# special models
-	['8x8',     1, 2, 100,  80, 32, 20, False, True,  True, False],
-	['8x8',     1, 2, 100,  80, 32, 20, True,  False, True, False],
+	['8x8',     1, 2, 100,  80, 32, 20, False, True,  True, False, False],
+	['8x8',     1, 2, 100,  80, 32, 20, True,  False, True, False, False],
 ]
 
 def main(argv):
 	if len(argv) < 2:
 		print 'Usage:', argv[0], '<params_id> [experiment]'
 		print
-		print '  {0:>3} {1:>5} {2:>3} {3:>4} {4:>5} {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5} {11:>5}'.format(
-			'ID', 'PS', 'SS', 'OC', 'ND', 'MI', 'NS', 'MC', 'LS', 'RG', 'TP', 'MN')
+		print '  {0:>3} {1:>5} {2:>3} {3:>4} {4:>5} {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5} {11:>5} {12:>5}'.format(
+			'ID', 'PS', 'SS', 'OC', 'ND', 'MI', 'NS', 'MC', 'LS', 'RG', 'TP', 'MN', 'SC')
 
 		for id, params in enumerate(parameters):
-			print '  {0:>3} {1:>5} {2:>3} {3:>3}x {4:>4}k {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5} {11:>5}'.format(id, *params)
+			print '  {0:>3} {1:>5} {2:>3} {3:>3}x {4:>4}k {5:>4} {6:>5} {7:>3} {8:>5} {9:>5} {10:>5} {11:>5} {12:>5}'.format(id, *params)
 
 		print
 		print '  ID = parameter set'
@@ -68,6 +69,7 @@ def main(argv):
 		print '  RG = radially Gaussianize first'
 		print '  TP = optimize marginal distributions'
 		print '  MN = explicitly model Gaussian noise'
+		print '  SC = initialize with sparse coding'
 		print
 		print '  If an experiment is specified, it will be used to initialize the model parameters.'
 
@@ -93,7 +95,8 @@ def main(argv):
 	train_subspaces, \
 	radially_gaussianize, \
 	train_prior, \
-	noise = parameters[int(argv[1])]
+	noise, \
+	sparse_coding = parameters[int(argv[1])]
 	num_data = num_data * 1000
 
 	
@@ -132,23 +135,6 @@ def main(argv):
 		# initialize ISA marginals with Laplace distribution
 		isa.initialize(method='laplace')
 
-	if len(argv) > 2:
-		# initialize ISA model with already trained model
-		results = Experiment(argv[2])
-	
-		model_ = results['model'] if isinstance(results['model'], ISA) \
-			else results['model'][1].model
-
-		if model_.num_hiddens != isa.num_hiddens or \
-		   model_.num_visibles != isa.num_visibles:
-			raise ValueError('Specified model for initialization is incompatible with chosen parameters.')
-
-		isa.A = model_.A
-		isa.subspaces = model_.subspaces
-
-		# free memory
-		del model_
-
 
 
 	### FURTHER PREPROCESSING
@@ -172,7 +158,44 @@ def main(argv):
 	# train mixture model on DC component
 	model.train(data, 0, max_iter=100)
 
-	# turn on a little bit of regularization of the marginals
+	if len(argv) > 2:
+		# initialize ISA model with already trained model
+		results = Experiment(argv[2])
+	
+		model_ = results['model'] if isinstance(results['model'], ISA) \
+			else results['model'][1].model
+
+		if model_.num_hiddens != isa.num_hiddens or \
+		   model_.num_visibles != isa.num_visibles:
+			raise ValueError('Specified model for initialization is incompatible with chosen parameters.')
+
+		model[1].model.A = model_.A
+		model[1].model.subspaces = model_.subspaces
+
+		# free memory
+		del model_
+		
+	elif sparse_coding:
+		# initialize with sparse coding
+		model[1].model.train_of(wt(data[1:]),
+			max_iter=20,
+			noise_var=0.1,
+			var_goal=1.,
+			beta=10.,
+			step_width=0.01,
+			sigma=1.0)
+		model[1].model.orthogonalize()
+
+	else:
+		# initialize with fixed marginal distributions
+		model.train(data[:, :20000], 1,
+			max_iter=100, 
+			train_prior=False,
+			persistent=True,
+			method=('sgd', {'train_noise': False}), 
+			sampling_method=('gibbs', {'num_steps': 2}))
+
+	# use a little bit of regularization of the marginals
 	for gsm in model[1].model.subspaces:
 		gsm.gamma = 1e-3
 		gsm.alpha = 2.
@@ -180,14 +203,6 @@ def main(argv):
 
 	# enable additive Gaussian noise
 	model[1].model.noise = noise
-
-	# initialize, train and finetune ISA model
-	model.train(data[:, :20000], 1,
-		max_iter=100, 
-		train_prior=False,
-		persistent=True,
-		method=('sgd', {'train_noise': False}), 
-		sampling_method=('gibbs', {'num_steps': 2}))
 
 	# save intermediate results
 	experiment['parameters'] = parameters[int(argv[1])]
@@ -197,18 +212,18 @@ def main(argv):
 
 	# train using SGD with regularization turned on
 	model.train(data[:, :20000], 1,
-		max_iter=max_iter, 
+		max_iter=max_iter,
 		train_prior=train_prior,
 		train_subspaces=train_subspaces,
 		init_sampling_steps=10,
 		persistent=True,
-		method=('sgd', {'train_noise': False}), 
+		method=('sgd', {'train_noise': False}),
 		sampling_method=('gibbs', {'num_steps': 2}))
 
 	# save intermediate results
 	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
 
-	# turn off regularization
+	# disable regularization of the marginals
 	for gsm in model[1].model.subspaces:
 		gsm.gamma = 0.
 
