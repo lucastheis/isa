@@ -26,8 +26,7 @@ def reconstruct(images, wt, rg):
 def main(argv):
 	experiment = Experiment()
 
-#	data = cifar.load([1, 2, 3, 4, 5])[0]
-	data = cifar.load([1, 2])[0]
+	data = cifar.load([1, 2, 3, 4, 5])[0]
 	data = cifar.preprocess(data)
 
 	# apply PCA whitening and reduce dimensionality
@@ -43,17 +42,6 @@ def main(argv):
 	data = rg(data)
 
 	transforms = [wt, rg]
-
-	from matplotlib.pyplot import imshow, show, clf
-	images = reconstruct(data[:, :100], wt, rg)
-	images = (images - min(images)) / (max(images) - min(images))
-	for i in range(20):
-		print i
-		clf()
-		imshow(images[i], interpolation='nearest')
-		show()
-
-	return 0
 
 	for _ in range(2):
 		isa = ISA(data.shape[0])
