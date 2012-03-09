@@ -205,7 +205,7 @@ class ISA(Distribution):
 			if self.noise:
 				self.train_analytic(Y, **method[1])
 
-			if method[0].lower() == 'sgd':
+			elif method[0].lower() == 'sgd':
 				improved = self.train_sgd(Y, **method[1])
 
 				if adaptive:
@@ -665,17 +665,23 @@ class ISA(Distribution):
 		# initial momentum
 		P = 0.
 
+		if self.noise:
+			# ignore model's noise covariance
+			A = self.A[:, self.num_visibles:]
+		else:
+			A = self.A
+
 		def compute_map(X):
 			"""
 			Computes the MAP for Laplacian prior and Gaussian additive noise.
 			"""
 
-			AA = dot(self.A.T, self.A)
-			Ax = dot(self.A.T, X)
+			AA = dot(A.T, A)
+			Ax = dot(A.T, X)
 
 			def f(y, i):
 				y = y.reshape(-1, 1)
-				return sum(square(X[:, [i]] - dot(self.A, y))) / (2. * noise_var) + beta * sum(log(1. + square(y / sigma)))
+				return sum(square(X[:, [i]] - dot(A, y))) / (2. * noise_var) + beta * sum(log(1. + square(y / sigma)))
 
 			def df(y, i):
 				y = y.reshape(-1, 1)
@@ -683,7 +689,7 @@ class ISA(Distribution):
 				return grad.flatten()
 
 			# initial hidden states
-			Y = asshmarray(dot(self.A.T, X) / sum(square(self.A), 0).reshape(-1, 1))
+			Y = asshmarray(dot(A.T, X) / sum(square(A), 0).reshape(-1, 1))
 
 			def parfor(i):
 				Y[:, i] = fmin_cg(f, Y[:, i], df, (i,), disp=False, maxiter=100, gtol=tol)
@@ -691,7 +697,7 @@ class ISA(Distribution):
 
 			return Y
 
-		self.A = self.A / sqrt(sum(square(self.A), 0))
+		A = A / sqrt(sum(square(A), 0))
 
 		for i in range(max_iter):
 			if shuffle:
@@ -705,18 +711,23 @@ class ISA(Distribution):
 					Y = compute_map(batch)
 
 					# calculate gradient and update basis
-					P = momentum * P + dot(batch - dot(self.A, Y), Y.T) / batch_size
-					self.A += step_width * P
+					P = momentum * P + dot(batch - dot(A, Y), Y.T) / batch_size
+					A += step_width * P
 
 					# normalize basis
 					Y_var = (1. - var_eta) * Y_var + var_eta * mean(square(Y), 1)
 					gain *= power(Y_var / var_goal, alpha).reshape(1, -1)
-					self.A = self.A / sqrt(sum(square(self.A), 0)) * gain
+					A = A / sqrt(sum(square(A), 0)) * gain
 
 					if self.VERBOSITY > 0:
 						print 'epoch {0}, batch {1}'.format(i, b / batch_size)
 						print '{0:.4f} {1:.4f} {2:.4f}'.format(
 							float(min(Y_var)), float(mean(Y_var)), float(max(Y_var)))
+
+		if self.noise:
+			self.A[:, self.num_visibles:] = A
+		else:
+			self.A = A
 			
 
 

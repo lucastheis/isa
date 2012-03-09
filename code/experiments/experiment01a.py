@@ -159,6 +159,15 @@ def main(argv):
 	# train mixture model on DC component
 	model.train(data, 0, max_iter=100)
 
+	# use a little bit of regularization of the marginals
+	for gsm in model[1].model.subspaces:
+		gsm.gamma = 1e-3
+		gsm.alpha = 2.
+		gsm.beta = 1.
+
+	# enable additive Gaussian noise
+	model[1].model.noise = noise
+
 	if len(argv) > 2:
 		# initialize ISA model with already trained model
 		results = Experiment(argv[2])
@@ -202,15 +211,6 @@ def main(argv):
 	experiment['model'] = model
 	experiment.progress(25)
 	experiment.save('results/experiment01a/experiment01a.0.{0}.{1}.xpck')
-
-	# use a little bit of regularization of the marginals
-	for gsm in model[1].model.subspaces:
-		gsm.gamma = 1e-3
-		gsm.alpha = 2.
-		gsm.beta = 1.
-
-	# enable additive Gaussian noise
-	model[1].model.noise = noise
 
 	# train using SGD with regularization turned on
 	model.train(data[:, :20000], 1,
