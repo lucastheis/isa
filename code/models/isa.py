@@ -202,6 +202,9 @@ class ISA(Distribution):
 				sampling_method[1]['Z'] = dot(self.nullspace_basis(), Y)
 
 			# optimize linear features (M)
+			if self.noise:
+				self.train_analytic(Y, **method[1])
+
 			if method[0].lower() == 'sgd':
 				improved = self.train_sgd(Y, **method[1])
 
@@ -371,9 +374,50 @@ class ISA(Distribution):
 
 
 
+	def train_analytic(self, Y, **kwargs):
+		"""
+		Optimizes linear filters analytically. This only works if the model 
+		has additive Gaussian noise enabled. Otherwise it won't change the filters.
+
+		@type  train_noise: boolean
+		@param train_noise: whether or not to update the noise covariance
+
+		@rtype: bool
+		@return: true if additive noise is enabled, otherwise false
+		"""
+
+		if not self.noise:
+			return False
+
+		train_noise = kwargs.get('train_noise', True)
+
+		# reconstruct data points
+		X = dot(self.A, Y)
+
+		# remove noise components
+		Y = Y[self.num_visibles:, :]
+		A = self.A[:, self.num_visibles:]
+
+		# noisy reconstruction
+		Z = dot(A, Y)
+
+		# update basis
+		Cyy = dot(Y, Y.T) / Y.shape[1]
+		Czy = dot(Z, Y.T) / Y.shape[1]
+		self.A[:, self.num_visibles:] = solve(Cyy, Czy.T).T
+
+		if train_noise:
+			# update covariance
+			self.A[:, :self.num_visibles] = sqrtm(cov(X - Z))
+
+		return True
+
+
+
 	def train_lbfgs(self, Y, **kwargs):
 		"""
-		A stochastic variant of L-BFGS.
+		A stochastic variant of L-BFGS. If additive Gaussian noise is enabled, this method
+		will always also optimize the covariance of the noise.
 
 		@type  max_iter: integer
 		@param max_iter: maximum number of iterations through data set
@@ -472,6 +516,9 @@ class ISA(Distribution):
 
 		@type  pocket: bool
 		@param pocket: do not update parameters in case of performance degradation (default: C{shuffle})
+
+		@type  train_noise: boolean
+		@param train_noise: whether or not to update the noise covariance
 
 		@rtype: bool
 		@return: false if no improvement could be achieved
@@ -1180,8 +1227,8 @@ class ISA(Distribution):
 
 	def loglikelihood(self, X, num_samples=10, method='biased', sampling_method=('ais', {'num_steps': 10})):
 		"""
-		Computes the log-likelihood for a set of data samples. If the model is overcomplete, the
-		log-likelihood is estimated using one of two importance sampling methods. The biased method
+		Computes the log-likelihood (in nats) for a set of data samples. If the model is overcomplete,
+		the log-likelihood is estimated using one of two importance sampling methods. The biased method
 		tends to underestimate the log-likelihood. To get rid of the bias, use more samples.
 		The unbiased method oftentimes suffers from extremely high variance and should be used with
 		caution.

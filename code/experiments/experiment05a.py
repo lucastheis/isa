@@ -1,5 +1,5 @@
 """
-Train hierarchical ICA on CIFAR-10.
+Train hierarchical ISA on CIFAR-10.
 """
 
 import sys

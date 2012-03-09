@@ -40,6 +40,7 @@ parameters = [
 	# overcomplete models with Laplace prior
 	['8x8',     1, 2, 100, 200, 32,  5, False, False, False, False, False],
 	['16x16',   1, 2, 100, 200, 32,  5, False, False, False, False, False],
+	['16x16',   1, 2, 100, 200, 32,  5, False, False, False, False, True],
 
 	# special models
 	['8x8',     1, 2, 100,  80, 32, 20, False, True,  True, False, False],
@@ -80,7 +81,7 @@ def main(argv):
 
 
 	# start experiment
-	experiment = Experiment()
+	experiment = Experiment(server='10.38.138.150')
 
 
 
@@ -189,11 +190,18 @@ def main(argv):
 	else:
 		# initialize with fixed marginal distributions
 		model.train(data[:, :20000], 1,
-			max_iter=100, 
+			max_iter=200, 
 			train_prior=False,
 			persistent=True,
-			method=('sgd', {'train_noise': False}), 
+			method=('sgd', {'train_noise': False, 'max_iter': 2}), 
 			sampling_method=('gibbs', {'num_steps': 2}))
+
+	# save intermediate results
+	experiment['parameters'] = parameters[int(argv[1])]
+	experiment['transforms'] = [dct, wt]
+	experiment['model'] = model
+	experiment.progress(25)
+	experiment.save('results/experiment01a/experiment01a.0.{0}.{1}.xpck')
 
 	# use a little bit of regularization of the marginals
 	for gsm in model[1].model.subspaces:
@@ -203,12 +211,6 @@ def main(argv):
 
 	# enable additive Gaussian noise
 	model[1].model.noise = noise
-
-	# save intermediate results
-	experiment['parameters'] = parameters[int(argv[1])]
-	experiment['transforms'] = [dct, wt]
-	experiment['model'] = model
-	experiment.save('results/experiment01a/experiment01a.0.{0}.{1}.xpck')
 
 	# train using SGD with regularization turned on
 	model.train(data[:, :20000], 1,
@@ -221,6 +223,7 @@ def main(argv):
 		sampling_method=('gibbs', {'num_steps': 2}))
 
 	# save intermediate results
+	experiment.progress(50)
 	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
 
 	# disable regularization of the marginals
@@ -238,6 +241,7 @@ def main(argv):
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 
 	# save intermediate results
+	experiment.progress(75)
 	experiment.save('results/experiment01a/experiment01a.2.{0}.{1}.xpck')
 
 	if patch_size == '16x16' and overcompleteness > 1:
@@ -252,9 +256,10 @@ def main(argv):
 		persistent=True,
 		init_sampling_steps=50,
 		method='lbfgs', 
-		sampling_method=('gibbs', {'num_steps': num_steps}))
+		sampling_method=('gibbs', {'num_steps': num_steps, 'train_noise': True}))
 
 	# save results
+	experiment.progress(100)
 	experiment.save('results/experiment01a/experiment01a.{0}.{1}.xpck')
 
 	return 0

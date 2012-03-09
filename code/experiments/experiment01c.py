@@ -7,7 +7,7 @@ import sys
 sys.path.append('./code')
 
 from tools import Experiment, preprocess, mapp
-from numpy import load
+from numpy import load, mean, log, min, max, std, sqrt
 from models import Distribution 
 
 Distribution.VERBOSITY = 0
@@ -18,6 +18,8 @@ def main(argv):
 		print 'Usage:', argv[0], '<experiment>', '[data_points]'
 		return 0
 
+	experiment = Experiment()
+
 	if len(argv) < 3:
 		indices = range(1000)
 	else:
@@ -26,7 +28,6 @@ def main(argv):
 			indices = range(int(fr), int(to))
 		else:
 			indices = range(int(argv[2]))
-
 
 	# load experiment with trained model
 	results = Experiment(argv[1])
@@ -46,10 +47,23 @@ def main(argv):
 	data = wt(dct(data)[1:])
 
 	# compute logloss on whitened data
-	logloss = model.evaluate(data[:, indices], num_samples=200, sampling_method=('ais', {'num_steps': 200}))
+	ll = model.loglikelihood(data[:, indices],
+		num_samples=200, sampling_method=('ais', {'num_steps': 200}))
+	ll = ll / log(2.) / data.shape[0]
+
+	# average log-loss and standard error of the mean
+	logloss = -mean(ll)
+	sem = std(ll, ddof=1) / sqrt(ll.size)
 
 	print min(indices), max(indices)
-	print '{0:.5f} [bit/pixel]'.format(logloss)
+	print '{0:.5f} +- {1:.5f} [bit/pixel]'.format(logloss, sem)
+
+	experiment['indices'] = indices
+	experiment['model'] = model
+	experiment['loglik'] = ll
+	experiment['logloss'] = logloss
+	experiment['sem'] = sem
+	experiment.save('results/experiment01c/experiment01c.{0}.{1}.xpck')
 
 	return 0
 
