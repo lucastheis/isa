@@ -107,13 +107,13 @@ class ISA(Distribution):
 			if self.noise:
 				# ignore first subspace
 				gsm = GSM(self.subspaces[1].dim, self.subspaces[1].num_scales)
-				gsm.train(samples, max_iter=100)
+				gsm.train(samples, max_iter=200, tol=1e-8)
 
 				for m in self.subspaces[1:]:
 					m.scales = gsm.scales.copy()
 			else:
 				gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
-				gsm.train(samples, max_iter=100)
+				gsm.train(samples, max_iter=200, tol=1e-8)
 
 				for m in self.subspaces:
 					m.scales = gsm.scales.copy()
