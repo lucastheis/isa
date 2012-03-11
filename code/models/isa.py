@@ -34,7 +34,7 @@ class ISA(Distribution):
 		@type  ssize: integer
 		@param ssize: subspace dimensionality
 
-		@type  noise: bool
+		@type  noise: bool/ndarray
 		@param noise: add additional hidden units for noise
 		"""
 
@@ -176,6 +176,9 @@ class ISA(Distribution):
 		@type  sampling_method: tuple
 		@param sampling_method: method and parameters to generate hidden representations
 
+		@type  persistent: bool
+		@param persistent: initialize posterior samples with previous samples (default: True)
+
 		@type  init_sampling_steps: integer
 		@param init_sampling_steps: number of steps used to initialize persistent samples (default: 0)
 
@@ -237,7 +240,10 @@ class ISA(Distribution):
 				sampling_method[1]['Z'] = dot(self.nullspace_basis(), Y)
 
 			# optimize linear features (M)
-			if method[0].lower() == 'sgd':
+			if self.noise:
+				self.train_analytic(Y, **method[1])
+
+			elif method[0].lower() == 'sgd':
 				improved = self.train_sgd(Y, **method[1])
 
 				if adaptive:
@@ -409,9 +415,52 @@ class ISA(Distribution):
 
 
 
+	def train_analytic(self, Y, **kwargs):
+		"""
+		Optimizes linear filters analytically. This only works if the model 
+		has additive Gaussian noise enabled. Otherwise it won't change the filters.
+
+		@type  train_noise: boolean
+		@param train_noise: whether or not to update the noise covariance
+
+		@rtype: bool
+		@return: true if additive noise is enabled, otherwise false
+		"""
+
+		if not self.noise:
+			return False
+
+		train_noise = kwargs.get('train_noise', True)
+
+		# reconstruct data points
+		X = dot(self.A, Y)
+
+		# remove noise components
+		Y = Y[self.num_visibles:, :]
+		A = self.A[:, self.num_visibles:]
+
+		# noisy reconstruction
+		Z = dot(A, Y)
+
+		# update basis
+		Cyy = dot(Y, Y.T) / Y.shape[1]
+		Czy = dot(Z, Y.T) / Y.shape[1]
+		A = solve(Cyy, Czy.T, sym_pos=True).T
+
+		self.A[:, self.num_visibles:] = A
+
+		if train_noise:
+			# update covariance
+			self.A[:, :self.num_visibles] = sqrtm(cov(X - dot(A, Y)))
+
+		return True
+
+
+
 	def train_lbfgs(self, Y, **kwargs):
 		"""
-		A stochastic variant of L-BFGS.
+		A stochastic variant of L-BFGS. If additive Gaussian noise is enabled, this method
+		will always also optimize the covariance of the noise.
 
 		@type  max_iter: integer
 		@param max_iter: maximum number of iterations through data set
@@ -510,6 +559,9 @@ class ISA(Distribution):
 
 		@type  pocket: bool
 		@param pocket: do not update parameters in case of performance degradation (default: C{shuffle})
+
+		@type  train_noise: boolean
+		@param train_noise: whether or not to update the noise covariance
 
 		@rtype: bool
 		@return: false if no improvement could be achieved
@@ -649,9 +701,15 @@ class ISA(Distribution):
 		sigma = kwargs.get('sigma', 0.07)
 		tol = kwargs.get('tol', 0.01)
 
+		if self.noise:
+			# ignore model's noise covariance
+			A = self.A[:, self.num_visibles:]
+		else:
+			A = self.A
+
 		# estimated variance for each component
-		Y_var = ones([1, self.num_hiddens]) * var_goal
-		gain = ones([1, self.num_hiddens])
+		Y_var = ones([1, A.shape[1]]) * var_goal
+		gain = ones([1, A.shape[1]])
 
 		# initial momentum
 		P = 0.
@@ -661,12 +719,12 @@ class ISA(Distribution):
 			Computes the MAP for Laplacian prior and Gaussian additive noise.
 			"""
 
-			AA = dot(self.A.T, self.A)
-			Ax = dot(self.A.T, X)
+			AA = dot(A.T, A)
+			Ax = dot(A.T, X)
 
 			def f(y, i):
 				y = y.reshape(-1, 1)
-				return sum(square(X[:, [i]] - dot(self.A, y))) / (2. * noise_var) + beta * sum(log(1. + square(y / sigma)))
+				return sum(square(X[:, [i]] - dot(A, y))) / (2. * noise_var) + beta * sum(log(1. + square(y / sigma)))
 
 			def df(y, i):
 				y = y.reshape(-1, 1)
@@ -674,7 +732,7 @@ class ISA(Distribution):
 				return grad.flatten()
 
 			# initial hidden states
-			Y = asshmarray(dot(self.A.T, X) / sum(square(self.A), 0).reshape(-1, 1))
+			Y = asshmarray(dot(A.T, X) / sum(square(A), 0).reshape(-1, 1))
 
 			def parfor(i):
 				Y[:, i] = fmin_cg(f, Y[:, i], df, (i,), disp=False, maxiter=100, gtol=tol)
@@ -682,7 +740,7 @@ class ISA(Distribution):
 
 			return Y
 
-		self.A = self.A / sqrt(sum(square(self.A), 0))
+		A = A / sqrt(sum(square(A), 0))
 
 		for i in range(max_iter):
 			if shuffle:
@@ -696,18 +754,23 @@ class ISA(Distribution):
 					Y = compute_map(batch)
 
 					# calculate gradient and update basis
-					P = momentum * P + dot(batch - dot(self.A, Y), Y.T) / batch_size
-					self.A += step_width * P
+					P = momentum * P + dot(batch - dot(A, Y), Y.T) / batch_size
+					A += step_width * P
 
 					# normalize basis
 					Y_var = (1. - var_eta) * Y_var + var_eta * mean(square(Y), 1)
 					gain *= power(Y_var / var_goal, alpha).reshape(1, -1)
-					self.A = self.A / sqrt(sum(square(self.A), 0)) * gain
+					A = A / sqrt(sum(square(A), 0)) * gain
 
 					if self.VERBOSITY > 0:
 						print 'epoch {0}, batch {1}'.format(i, b / batch_size)
 						print '{0:.4f} {1:.4f} {2:.4f}'.format(
 							float(min(Y_var)), float(mean(Y_var)), float(max(Y_var)))
+
+		if self.noise:
+			self.A[:, self.num_visibles:] = A
+		else:
+			self.A = A
 			
 
 
@@ -1218,8 +1281,8 @@ class ISA(Distribution):
 
 	def loglikelihood(self, X, num_samples=10, method='biased', sampling_method=('ais', {'num_steps': 10})):
 		"""
-		Computes the log-likelihood for a set of data samples. If the model is overcomplete, the
-		log-likelihood is estimated using one of two importance sampling methods. The biased method
+		Computes the log-likelihood (in nats) for a set of data samples. If the model is overcomplete,
+		the log-likelihood is estimated using one of two importance sampling methods. The biased method
 		tends to underestimate the log-likelihood. To get rid of the bias, use more samples.
 		The unbiased method oftentimes suffers from extremely high variance and should be used with
 		caution.
@@ -1355,7 +1418,7 @@ class ISA(Distribution):
 		delete the stored noise covariance matrix.
 
 		@type  noise: ndarray/bool
-		@param noise: the covariance matrix of the assumed noise or Frue/False
+		@param noise: the covariance matrix of the assumed noise or True/False
 		"""
 
 		if isinstance(noise, ndarray):
