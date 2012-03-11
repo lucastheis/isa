@@ -10,7 +10,7 @@ from distribution import Distribution
 from numpy import *
 from numpy import min, max, round
 from numpy.random import randint, randn, rand, logseries, permutation
-from numpy.linalg import svd, pinv, inv, det, slogdet, cholesky
+from numpy.linalg import svd, pinv, inv, det, slogdet, cholesky, eig
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b, fmin_cg, check_grad
 from scipy.stats import laplace, t
@@ -71,12 +71,32 @@ class ISA(Distribution):
 		@param method: type of initialization ('data', 'gabor' or 'random')
 		"""
 
+		if self.noise:
+			L = self.A[:, :self.num_visibles]
+
 		if method.lower() == 'data':
 			# initialize features with data points
 			if X is not None:
-				# center data
-				self.A = X[:, randint(X.shape[1], size=self.num_hiddens)] / sqrt(self.num_hiddens)
-				self.A /= sqrt(sum(square(self.A), 0))
+				if X.shape[1] < self.num_hiddens:
+					raise ValueError('Number of data points to small.')
+
+				elif X.shape[1] / 4 < self.num_hiddens:
+					self.A = X[:, permutation(X.shape[1])[:self.num_hiddens]]
+
+				else:
+					# whitening matrix
+					val, vec = eig(cov(X))
+					M = dot(diag(1. / val), vec.T)
+
+					# sort by norm in whitened space
+					indices = argsort(sqrt(sum(square(dot(M, X)), 0)))
+
+					# pick random subset
+					indices = indices[permutation(min([X.shape[1] / 4, 10000]))[:self.num_hiddens]]
+
+					self.A = X[:, indices]
+
+				self.orthogonalize()
 
 		elif method.lower() == 'gabor':
 			# initialize features with Gabor filters
@@ -121,11 +141,19 @@ class ISA(Distribution):
 		else:
 			raise ValueError('Unknown initialization method \'{0}\'.'.format(method))
 
+		if self.noise:
+			# don't initialize noise covariance
+			self.A[:, :self.num_visibles] = L
+
 
 
 	def train(self, X, method=('sgd', {}), sampling_method=('gibbs', {}), **kwargs):
 		"""
-		Optimizes model parameters with respect to the log-likelihoood.
+		Optimizes model parameters with respect to the log-likelihoood. If the model is
+		overcomplete, expectation maximization (EM) is used.
+
+		The callback function takes two arguments: the model and the current iteration of the
+		EM algorithm. It is called before the training starts and then after every iteration.
 
 		@type  max_iter: integer
 		@param max_iter: maximum number of iterations through the dataset
@@ -150,6 +178,9 @@ class ISA(Distribution):
 
 		@type  init_sampling_steps: integer
 		@param init_sampling_steps: number of steps used to initialize persistent samples (default: 0)
+
+		@type  callback: function
+		@param callback: called after every iteration
 		"""
 
 		max_iter = kwargs.get('max_iter', 100)
@@ -159,6 +190,7 @@ class ISA(Distribution):
 		orthogonalize = kwargs.get('orthogonalize', False)
 		persistent = kwargs.get('persistent', True)
 		init_sampling_steps = kwargs.get('init_sampling_steps', 0)
+		callback = kwargs.get('callback', None)
 
 		if Distribution.VERBOSITY > 0:
 			if self.num_hiddens > self.num_visibles:
@@ -180,6 +212,9 @@ class ISA(Distribution):
 
 		if adaptive and 'step_width' not in method[1]:
 			method[1]['step_width'] = 0.001
+
+		if callback:
+			callback(self, 0)
 
 		for i in range(max_iter):
 			# complete data (E)
@@ -218,6 +253,9 @@ class ISA(Distribution):
 			if orthogonalize:
 				# normalize feature matrix
 				self.orthogonalize()
+
+			if callback:
+				callback(self, i + 1)
 
 			if Distribution.VERBOSITY > 0:
 				if self.num_hiddens > self.num_visibles:
