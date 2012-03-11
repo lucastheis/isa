@@ -34,7 +34,7 @@ class ISA(Distribution):
 		@type  ssize: integer
 		@param ssize: subspace dimensionality
 
-		@type  noise: bool
+		@type  noise: bool/ndarray
 		@param noise: add additional hidden units for noise
 		"""
 
@@ -147,6 +147,9 @@ class ISA(Distribution):
 
 		@type  sampling_method: tuple
 		@param sampling_method: method and parameters to generate hidden representations
+
+		@type  persistent: bool
+		@param persistent: initialize posterior samples with previous samples (default: True)
 
 		@type  init_sampling_steps: integer
 		@param init_sampling_steps: number of steps used to initialize persistent samples (default: 0)
@@ -404,11 +407,13 @@ class ISA(Distribution):
 		# update basis
 		Cyy = dot(Y, Y.T) / Y.shape[1]
 		Czy = dot(Z, Y.T) / Y.shape[1]
-		self.A[:, self.num_visibles:] = solve(Cyy, Czy.T).T
+		A = solve(Cyy, Czy.T, sym_pos=True).T
+
+		self.A[:, self.num_visibles:] = A
 
 		if train_noise:
 			# update covariance
-			self.A[:, :self.num_visibles] = sqrtm(cov(X - Z))
+			self.A[:, :self.num_visibles] = sqrtm(cov(X - dot(A, Y)))
 
 		return True
 
@@ -658,18 +663,18 @@ class ISA(Distribution):
 		sigma = kwargs.get('sigma', 0.07)
 		tol = kwargs.get('tol', 0.01)
 
-		# estimated variance for each component
-		Y_var = ones([1, self.num_hiddens]) * var_goal
-		gain = ones([1, self.num_hiddens])
-
-		# initial momentum
-		P = 0.
-
 		if self.noise:
 			# ignore model's noise covariance
 			A = self.A[:, self.num_visibles:]
 		else:
 			A = self.A
+
+		# estimated variance for each component
+		Y_var = ones([1, A.shape[1]]) * var_goal
+		gain = ones([1, A.shape[1]])
+
+		# initial momentum
+		P = 0.
 
 		def compute_map(X):
 			"""
@@ -1375,7 +1380,7 @@ class ISA(Distribution):
 		delete the stored noise covariance matrix.
 
 		@type  noise: ndarray/bool
-		@param noise: the covariance matrix of the assumed noise or Frue/False
+		@param noise: the covariance matrix of the assumed noise or True/False
 		"""
 
 		if isinstance(noise, ndarray):
