@@ -15,6 +15,7 @@ from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b, fmin_cg, check_grad
 from scipy.stats import laplace, t
 from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi, sqrtm
+from warnings import warn
 from gsm import GSM
 from copy import deepcopy
 
@@ -240,7 +241,7 @@ class ISA(Distribution):
 				sampling_method[1]['Z'] = dot(self.nullspace_basis(), Y)
 
 			# optimize linear features (M)
-			if self.noise:
+			if method[0].lower() == 'analytic':
 				self.train_analytic(Y, **method[1])
 
 			elif method[0].lower() == 'sgd':
@@ -428,6 +429,7 @@ class ISA(Distribution):
 		"""
 
 		if not self.noise:
+			warn('Wrong training method for noiseless model.')
 			return False
 
 		train_noise = kwargs.get('train_noise', True)
@@ -439,13 +441,10 @@ class ISA(Distribution):
 		Y = Y[self.num_visibles:, :]
 		A = self.A[:, self.num_visibles:]
 
-		# noisy reconstruction
-		Z = dot(A, Y)
-
 		# update basis
 		Cyy = dot(Y, Y.T) / Y.shape[1]
-		Czy = dot(Z, Y.T) / Y.shape[1]
-		A = solve(Cyy, Czy.T, sym_pos=True).T
+		Cxy = dot(X, Y.T) / Y.shape[1]
+		A = solve(Cyy, Cxy.T, sym_pos=True).T
 
 		self.A[:, self.num_visibles:] = A
 
