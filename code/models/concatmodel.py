@@ -34,6 +34,14 @@ class ConcatModel(Distribution):
 
 
 
+	def initialize(self, data, model=None, **kwargs):
+		for i, m in enumerate(self.models):
+			if model is None or model == i:
+				m.initialize(data[:m.dim], **kwargs)
+			data = data[m.dim:]
+
+
+
 	def sample(self, num_samples=1):
 		return vstack(m.sample(num_samples) for m in self.models)
 

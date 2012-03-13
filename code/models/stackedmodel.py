@@ -14,6 +14,14 @@ class StackedModel(Distribution):
 
 
 
+	def initialize(self, data=None, **kwargs):
+		if data is not None:
+			for transform in self.transforms:
+				data = transform(data)
+		self.model.initialize(data, **kwargs)
+
+
+
 	def train(self, data, **kwargs):
 		for transform in self.transforms:
 			data = transform(data)
