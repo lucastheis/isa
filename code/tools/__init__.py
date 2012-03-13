@@ -7,3 +7,4 @@ from mapp import mapp
 from gamma import gammaincinv
 from logsumexp import logsumexp, logmeanexp
 from shmarray import asshmarray
+from patches import stitch, imsave, imformat
