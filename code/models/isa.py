@@ -81,23 +81,33 @@ class ISA(Distribution):
 				if X.shape[1] < self.num_hiddens:
 					raise ValueError('Number of data points to small.')
 
-				elif X.shape[1] / 4 < self.num_hiddens:
-					self.A = X[:, permutation(X.shape[1])[:self.num_hiddens]]
-
 				else:
 					# whitening matrix
 					val, vec = eig(cov(X))
-					M = dot(diag(1. / val), vec.T)
+
+					# whiten data
+					X_ = dot(dot(diag(1. / sqrt(val)), vec.T), X)
 
 					# sort by norm in whitened space
-					indices = argsort(sqrt(sum(square(dot(M, X)), 0)))
+					indices = argsort(sqrt(sum(square(X_), 0)))[::-1]
 
-					# pick random subset
-					indices = indices[permutation(min([X.shape[1] / 4, 10000]))[:self.num_hiddens]]
+					# pick 25% largest data points and normalize
+					X_ = X_[:, indices[:max([X.shape[1] / 4, self.num_hiddens])]]
+					X_ = X_ / sqrt(sum(square(X_), 0))
 
-					self.A = X[:, indices]
+					# pick first basis vector at random
+					A = X_[:, [randint(X_.shape[1])]]
 
-				self.orthogonalize()
+					for _ in range(self.num_hiddens - 1):
+						# pick vector with large angle to all other vectors
+						A = hstack([
+							A, X_[:, [argmin(max(abs(dot(A.T, X_)), 0))]]])
+
+					# orthogonalize and unwhiten
+					A = dot(sqrtmi(dot(A, A.T)), A)
+					A = dot(dot(vec, diag(sqrt(val))), A)
+
+					self.A = A
 
 		elif method.lower() == 'gabor':
 			# initialize features with Gabor filters
@@ -696,9 +706,10 @@ class ISA(Distribution):
 		alpha = kwargs.get('alpha', 0.02)
 		var_eta = kwargs.get('var_eta', 0.01)
 		var_goal = kwargs.get('var_goal', 0.1)
-		beta = kwargs.get('beta', 1.2)
-		sigma = kwargs.get('sigma', 0.07)
+		beta = kwargs.get('beta', 1.2) # strength of the prior
+		sigma = kwargs.get('sigma', 0.07) # noise standard deviation
 		tol = kwargs.get('tol', 0.01)
+		callback = kwargs.get('callback', None)
 
 		if self.noise:
 			# ignore model's noise covariance
@@ -741,6 +752,9 @@ class ISA(Distribution):
 
 		A = A / sqrt(sum(square(A), 0))
 
+		if callback is not None:
+			callback(self, 0)
+
 		for i in range(max_iter):
 			if shuffle:
 				# randomize order of data
@@ -766,11 +780,14 @@ class ISA(Distribution):
 						print '{0:.4f} {1:.4f} {2:.4f}'.format(
 							float(min(Y_var)), float(mean(Y_var)), float(max(Y_var)))
 
-		if self.noise:
-			self.A[:, self.num_visibles:] = A
-		else:
-			self.A = A
-			
+			if self.noise:
+				self.A[:, self.num_visibles:] = A
+			else:
+				self.A = A
+
+			if callback is not None:
+				callback(self, i + 1)
+
 
 
 	def sample(self, num_samples=1):
