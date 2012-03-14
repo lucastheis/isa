@@ -10,7 +10,6 @@ from tools import Experiment, cifar
 from models import GSM, ISA, StackedModel
 from transforms import LinearTransform, WhiteningTransform
 from transforms import SubspaceGaussianization, RadialGaussianization
-
 from numpy import dot, min, max
 from numpy.linalg import pinv
 
@@ -33,15 +32,17 @@ def main(argv):
 	wt = WhiteningTransform(data, symmetric=False)
 	data = wt(data)[:1024]
 
-	# train Gaussian scale mixture
-	gsm = GSM(data.shape[0], 20)
-	gsm.train(data, max_iter=200, tol=1e-7)
+#	# train Gaussian scale mixture
+#	gsm = GSM(data.shape[0], 20)
+#	gsm.train(data, max_iter=200, tol=1e-7)
+#
+#	# radially Gaussianize data
+#	rg = RadialGaussianization(gsm)
+#	data = rg(data)
+#
+#	transforms = [wt, rg]
 
-	# radially Gaussianize data
-	rg = RadialGaussianization(gsm)
-	data = rg(data)
-
-	transforms = [wt, rg]
+	transforms = [wt]
 
 	for _ in range(2):
 		isa = ISA(data.shape[0])

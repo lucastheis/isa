@@ -9,10 +9,10 @@ from pgf import *
 from tools import mapp
 from copy import deepcopy
 
-mapp.max_processes = 1
+mapp.max_processes = 4
 
 PLOT_RANGE = 6
-NUM_SAMPLES = 50000
+NUM_SAMPLES = 20000
 
 def main(argv):
 	gsm = GSM(1, 4)
@@ -34,7 +34,7 @@ def main(argv):
 	xlabel('$x_1$')
 	ylabel('$x_2$')
 	axis([-PLOT_RANGE, PLOT_RANGE, -PLOT_RANGE, PLOT_RANGE])
-	draw()
+#	draw()
 
 
 
@@ -60,18 +60,26 @@ def main(argv):
 		title('bases')
 		xlabel('$x_1$')
 		ylabel('$x_2$')
-		savefig('/Users/lucas/Desktop/bases.{0}.pdf'.format(epoch))
+		savefig('/Users/lucas/Desktop/bases.{0:0>2}.pdf'.format(epoch))
 
 
 	isa = ISA(2, 4, noise=False)
 	isa.initialize(data)
 	isa.initialize(method='laplace')
 	isa.train(data, 
-		method=('sgd', {'momentum': 0.5}),
+		method='lbfgs',
 		max_iter=50,
 		persistent=True,
 		sampling_method=('gibbs', {'num_steps': 5}),
 		callback=callback)
+#	isa.train_of(data, 
+#		max_iter=20,
+#		noise_var=0.1,
+#		var_goal=1.,
+#		beta=10.,
+#		step_width=0.01,
+#		sigma=1.0,
+#		callback=callback)
 
 	# VISUALIZE
 	samples = isa.sample(10000)

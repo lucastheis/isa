@@ -34,11 +34,16 @@ class ConcatModel(Distribution):
 
 
 
-	def initialize(self, data, model=None, **kwargs):
-		for i, m in enumerate(self.models):
-			if model is None or model == i:
-				m.initialize(data[:m.dim], **kwargs)
-			data = data[m.dim:]
+	def initialize(self, data=None, model=None, **kwargs):
+		if data is None:
+			for i, m in enumerate(self.models):
+				if model is None or model == i:
+					m.initialize(**kwargs)
+		else:
+			for i, m in enumerate(self.models):
+				if model is None or model == i:
+					m.initialize(data[:m.dim], **kwargs)
+				data = data[m.dim:]
 
 
 

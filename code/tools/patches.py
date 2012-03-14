@@ -1,8 +1,13 @@
 """
-Tools for visualizing patches.
+Tools for sampling and visualizing image patches.
 """
 
-from numpy import asarray, min, max, zeros, ones, vstack, hstack
+__license__ = 'MIT License <http://www.opensource.org/licenses/mit-license.php>'
+__author__ = 'Lucas Theis <lucas@tuebingen.mpg.de>'
+__docformat__ = 'epytext'
+__version__ = '0.1.0'
+
+from numpy import asarray, abs, min, max, zeros, ones, vstack, hstack
 from PIL import Image
 
 def stitch(patches, **kwargs):
@@ -75,6 +80,9 @@ def stitch(patches, **kwargs):
 	grid.append(zeros([margin, row.shape[1], row.shape[-1]]) + bgcolor)
 	grid = vstack(grid)
 
+	if patches.dtype == 'uint8' and grid.dtype != 'uint8':
+		grid = asarray(grid + 0.5, 'uint8')
+
 	# remove last dimension if gray-scale
 	if grid.shape[-1] == 1:
 		return grid[:, :, 0]
@@ -98,12 +106,15 @@ def imsave(filename, img):
 
 
 
-def imformat(img):
+def imformat(img, symmetric=True):
 	"""
 	Rescales and converts images to uint8.
 
 	@type  img: array_like
 	@param img: any image
+
+	@type  symmetric: boolean
+	@param symmetric: if true, 0. will be mapped to 128
 
 	@rtype: ndarray
 	@return: the converted image
@@ -113,6 +124,40 @@ def imformat(img):
 
 	if 'float' in str(img.dtype) or max(img) > 255 or min(img) < 0:
 		# rescale
-		a, b = float(min(img)), max(img)
-		img = (img - a) / (b - a) * 255. + 0.5
+		if symmetric:
+			a = float(max(abs(img)))
+			img = (img + a) / (2. * a) * 255. + 0.5
+		else:
+			a, b = float(min(img)), max(img)
+			img = (img - a) / (b - a) * 255. + 0.5
 	return asarray(img, 'uint8')
+
+
+
+def sample(img, patch_size, num_samples):
+	"""
+	Generates a random sample of image patches from an image.
+
+	@type  img: array_like
+	@param img: a grayscale image
+	
+	@type  patch_size: tuple
+	@param patch_size: height and width of patches
+
+	@type  num_samples: integer
+	@param num_samples: number of samples
+
+	@rtype: ndarray
+	@return: patches stored in an KxMxN array
+	"""
+
+	# uniformly sample patch locations
+	xpos = floor(uniform(0, img.shape[0] - patch_size[0] + 1, num_samples))
+	ypos = floor(uniform(0, img.shape[1] - patch_size[1] + 1, num_samples))
+
+	# collect sample patches
+	samples = []
+	for i in range(num_samples):
+		samples.append(img[xpos[i]:xpos[i] + patch_size[0], ypos[i]:ypos[i] + patch_size[1]])
+
+	return array(samples)

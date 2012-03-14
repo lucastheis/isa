@@ -13,7 +13,7 @@ from numpy.random import randint, randn, rand, logseries, permutation
 from numpy.linalg import svd, pinv, inv, det, slogdet, cholesky, eig
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b, fmin_cg, check_grad
-from scipy.stats import laplace, t
+from scipy.stats import laplace, t, cauchy
 from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi, sqrtm
 from warnings import warn
 from gsm import GSM
@@ -124,16 +124,20 @@ class ISA(Distribution):
 			# initialize with Gaussian white noise
 			self.A = randn(num_visibles, num_hiddens)
 
-		elif method.lower() == 'laplace' or method.lower() == 'student':
+		elif method.lower() in ['laplace', 'student', 'cauchy']:
 			if method.lower() == 'laplace':
 				# approximate multivariate Laplace with GSM
 				samples = randn(self.subspaces[0].dim, 10000)
 				samples = samples / sqrt(sum(square(samples), 0))
 				samples = laplace.rvs(size=[1, 10000]) * samples
-			else:
-				samples = randn(self.subspaces[0].dim, 10000)
+			elif method.lower() == 'student':
+				samples = randn(self.subspaces[0].dim, 20000)
 				samples = samples / sqrt(sum(square(samples), 0))
-				samples = t.rvs(2., size=[1, 10000]) * samples
+				samples = t.rvs(2., size=[1, 20000]) * samples
+			else:
+				samples = randn(self.subspaces[0].dim, 100000)
+				samples = samples / sqrt(sum(square(samples), 0))
+				samples = cauchy.rvs(size=[1, 100000]) * samples
 
 			if self.noise:
 				# ignore first subspace
@@ -215,6 +219,16 @@ class ISA(Distribution):
 		if isinstance(method, str):
 			method = (method, {})
 
+		if method[0].lower() == 'of':
+			# don't sample, use sparse coding
+			if callback:
+				method[1]['callback'] = callback
+			self.train_of(X, **method[1])
+			return
+
+		if callback:
+			callback(self, 0)
+
 		if isinstance(sampling_method, str):
 			sampling_method = (sampling_method, {})
 
@@ -226,9 +240,6 @@ class ISA(Distribution):
 
 		if adaptive and 'step_width' not in method[1]:
 			method[1]['step_width'] = 0.001
-
-		if callback:
-			callback(self, 0)
 
 		for i in range(max_iter):
 			# complete data (E)
@@ -242,7 +253,7 @@ class ISA(Distribution):
 				# learn subspaces (M)
 				Y = self.train_subspaces(Y)
 
-			if not orthogonalize and train_prior or train_subspaces:
+			if not orthogonalize and (train_prior or train_subspaces):
 				# normalize variances of marginals
 				self.normalize_prior()
 

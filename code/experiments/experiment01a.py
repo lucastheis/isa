@@ -23,28 +23,28 @@ from numpy.linalg import svd
 # PS, SS, OC, ND, MI, NS, MC, LS, RG, TP, MN, SC
 parameters = [
 	# complete models
-	['8x8',     1, 1, 100,  40, 32,  0, False, False, True, False, False],
-	['16x16',   1, 1, 100,  40, 32,  0, False, False, True, False, False],
-	['8x8',     2, 1, 100,  40, 32,  0, False, False, True, False, False],
-	['16x16',   2, 1, 100,  40, 32,  0, False, False, True, False, False],
+	['8x8',     1, 1, 100,  40,   32,  0, False, False, True, False, False],
+	['16x16',   1, 1, 100,  40,   32,  0, False, False, True, False, False],
+	['8x8',     2, 1, 100,  40,   32,  0, False, False, True, False, False],
+	['16x16',   2, 1, 100,  40,   32,  0, False, False, True, False, False],
 
 	# overcomplete models
-	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, False, False],
-	['8x8',     2, 2, 100, 400, 32,  5, False, False, True, False, False],
-	['16x16',   1, 2, 100, 200, 32,  5, False, False, True, False, False],
+	['8x8',     1, 2, 100, 200,   32,  5, False, False, True, False, False],
+	['8x8',     2, 2, 100, 400,   32,  5, False, False, True, False, False],
+	['16x16',   1, 2, 100, 200,   32,  5, False, False, True, False, False],
 
 	# overcomplete models with noise
-	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, True, False],
-	['8x8',     1, 2, 100, 200, 32,  5, False, False, True, True, True],
+	['8x8',     1, 2, 100, 200,   32,  5, False, False, True, True, False],
+	['8x8',     1, 2, 100, 200,   32,  5, False, False, True, True, True],
 
 	# overcomplete models with Laplace prior
-	['8x8',     1, 2, 100, 200, 32,  5, False, False, False, False, False],
-	['16x16',   1, 2, 100, 200, 32,  5, False, False, False, False, False],
-	['16x16',   1, 2, 100, 200, 32,  5, False, False, False, False, True],
+	['8x8',     1, 2, 100, 200,   32,  5, False, False, False, False, False],
+	['16x16',   1, 2, 100, 200,   32,  5, False, False, False, False, False],
+	['16x16',   1, 2, 100, 200,   32,  5, False, False, False, False, True],
 
 	# special models
-	['8x8',     1, 2, 100,  80, 32, 20, False, True,  True, False, False],
-	['8x8',     1, 2, 100,  80, 32, 20, True,  False, True, False, False],
+	['8x8',     1, 2, 100,  80,   32, 20, False, True,  True, False, False],
+	['8x8',     1, 2, 100,  80,   32, 20, True,  False, True, False, False],
 ]
 
 def main(argv):
@@ -117,8 +117,8 @@ def main(argv):
 
 	if noise:
 		# noise covariance matrix
-#		noise = dot(wt.A, wt.A.T) / 20.
-		noise = eye(data.shape[0] - 1) / 10.
+#		noise = dot(wt.A, wt.A.T) / 5.
+		noise = eye(data.shape[0] - 1) / 5.
 		
 
 
@@ -165,9 +165,6 @@ def main(argv):
 		gsm.alpha = 2.
 		gsm.beta = 1.
 
-	# enable additive Gaussian noise
-	model[1].model.noise = noise
-
 	if len(argv) > 2:
 		# initialize ISA model with already trained model
 		results = Experiment(argv[2])
@@ -198,12 +195,13 @@ def main(argv):
 
 	else:
 		# initialize with fixed marginal distributions
-		model.train(data[:, :20000], 1,
-			max_iter=200, 
-			train_prior=False,
-			persistent=True,
-			method=('sgd', {'train_noise': False, 'max_iter': 2}), 
-			sampling_method=('gibbs', {'num_steps': 2}))
+#		model.train(data[:, :20000], 1,
+#			max_iter=200,
+#			train_prior=False,
+#			persistent=True,
+#			method=('analytic' if isa.noise else 'sgd', {'train_noise': False}), 
+#			sampling_method=('gibbs', {'num_steps': 2}))
+		model.initialize(data, 1)
 
 	# save intermediate results
 	experiment['parameters'] = parameters[int(argv[1])]
@@ -219,7 +217,7 @@ def main(argv):
 		train_subspaces=train_subspaces,
 		init_sampling_steps=10,
 		persistent=True,
-		method=('sgd', {'train_noise': False}),
+		method=('analytic' if isa.noise else 'sgd', {'train_noise': False}),
 		sampling_method=('gibbs', {'num_steps': 2}))
 
 	# save intermediate results
@@ -227,8 +225,8 @@ def main(argv):
 	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
 
 	# disable regularization of the marginals
-	for gsm in model[1].model.subspaces:
-		gsm.gamma = 0.
+#	for gsm in model[1].model.subspaces:
+#		gsm.gamma = 0.
 
 	# train using SGD with regularization turned off
 	model.train(data[:, :20000], 1,
@@ -237,7 +235,7 @@ def main(argv):
 		train_subspaces=train_subspaces,
 		init_sampling_steps=10,
 		persistent=True,
-		method=('sgd', {'train_noise': False}), 
+		method=('analytic' if isa.noise else 'sgd', {'train_noise': False}),
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 
 	# save intermediate results
@@ -256,7 +254,7 @@ def main(argv):
 		persistent=True,
 		init_sampling_steps=50,
 		method='lbfgs', 
-		sampling_method=('gibbs', {'num_steps': num_steps, 'train_noise': True}))
+		sampling_method=('gibbs', {'num_steps': num_steps}))
 
 	# save results
 	experiment.progress(100)
