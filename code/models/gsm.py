@@ -94,7 +94,7 @@ class GSM(Distribution):
 
 			# check for convergence
 			value_ = -mean(self.loglikelihood(data)) \
-				+ self.gamma * (self.alpha + 1) * sum(log(self.scales)) \
+				+ self.gamma * (self.alpha + 1.) * sum(log(self.scales)) \
 				+ self.gamma / 2. * sum(self.beta / square(self.scales))
 			if value - value_ < tol:
 				break
@@ -111,6 +111,15 @@ class GSM(Distribution):
 		"""
 
 		self.scales /= sqrt(mean(square(self.scales)))
+
+
+
+	def std(self):
+		"""
+		Returns the variance of this Gaussian scale mixture.
+		"""
+
+		return sqrt(mean(square(self.scales)))
 
 
 

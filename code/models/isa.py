@@ -18,11 +18,14 @@ from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi, sqrtm
 from warnings import warn
 from gsm import GSM
 from copy import deepcopy
+from time import time
 
 class ISA(Distribution):
 	"""
 	An implementation of overcomplete ISA using Gaussian scale mixtures.
 	"""
+
+	global_time = 0
 
 	def __init__(self, num_visibles, num_hiddens=None, ssize=1, noise=False):
 		"""
@@ -174,7 +177,7 @@ class ISA(Distribution):
 		@param max_iter: maximum number of iterations through the dataset
 
 		@type  method: tuple
-		@param method: optimization method used to optimize filters
+		@param method: optimization method used to optimize basis
 
 		@type  adative: bool
 		@param adaptive: automatically adjust step width when using SGD (default: True)
@@ -184,6 +187,9 @@ class ISA(Distribution):
 
 		@type  train_subspaces: bool
 		@param train_subspaces: automatically learn subspace sizes (default: False)
+
+		@type  train_basis: bool
+		@param train_basis: whether or not to optimize linear basis (default: True)
 
 		@type  orthogonalize: bool
 		@param orthogonalize: after each step, orthogonalize rows of feature matrix (default: False)
@@ -205,6 +211,7 @@ class ISA(Distribution):
 		adaptive = kwargs.get('adaptive', True) 
 		train_prior = kwargs.get('train_prior', True)
 		train_subspaces = kwargs.get('train_subspaces', False)
+		train_basis = kwargs.get('train_basis', True)
 		orthogonalize = kwargs.get('orthogonalize', False)
 		persistent = kwargs.get('persistent', True)
 		init_sampling_steps = kwargs.get('init_sampling_steps', 0)
@@ -235,8 +242,7 @@ class ISA(Distribution):
 		if persistent and init_sampling_steps:
 			# initialize samples
 			sampling_method[1]['Z'] = self.sample_nullspace(X, 
-				method=(sampling_method[0], 
-					dict(sampling_method[1], num_steps=init_sampling_steps)))
+				method=(sampling_method[0], dict(sampling_method[1], num_steps=init_sampling_steps)))
 
 		if adaptive and 'step_width' not in method[1]:
 			method[1]['step_width'] = 0.001
@@ -262,25 +268,26 @@ class ISA(Distribution):
 				sampling_method[1]['Z'] = dot(self.nullspace_basis(), Y)
 
 			# optimize linear features (M)
-			if method[0].lower() == 'analytic':
-				self.train_analytic(Y, **method[1])
+			if train_basis:
+				if method[0].lower() == 'analytic':
+					self.train_analytic(Y, **method[1])
 
-			elif method[0].lower() == 'sgd':
-				improved = self.train_sgd(Y, **method[1])
+				elif method[0].lower() == 'sgd':
+					improved = self.train_sgd(Y, **method[1])
 
-				if adaptive:
-					# adjust learning rate
-					method[1]['step_width'] *= 1.1 if improved else 0.5
+					if adaptive:
+						# adjust learning rate
+						method[1]['step_width'] *= 1.1 if improved else 0.5
 
-			elif method[0].lower() == 'lbfgs':
-				self.train_lbfgs(Y, **method[1])
+				elif method[0].lower() == 'lbfgs':
+					self.train_lbfgs(Y, **method[1])
 
-			else:
-				raise ValueError('Unknown training method \'{0}\'.'.format(method[0]))
+				else:
+					raise ValueError('Unknown training method \'{0}\'.'.format(method[0]))
 
-			if orthogonalize:
-				# normalize feature matrix
-				self.orthogonalize()
+				if orthogonalize:
+					# normalize feature matrix
+					self.orthogonalize()
 
 			if callback:
 				callback(self, i + 1)
@@ -311,7 +318,6 @@ class ISA(Distribution):
 			model = self.subspaces[i]
 			model.train(Y[offset[i]:offset[i] + model.dim])
 			return model
-
 		self.subspaces = mapp(parfor, range(len(self.subspaces)))
 
 
@@ -321,7 +327,14 @@ class ISA(Distribution):
 		Normalizes the standard deviation of each subspace distribution.
 		"""
 
+		A = self.A
+
 		for gsm in self.subspaces:
+			# update basis
+			A[:, :gsm.dim] *= gsm.std()
+			A = A[:, gsm.dim:]
+
+			# update marginals
 			gsm.normalize()
 
 
@@ -488,9 +501,6 @@ class ISA(Distribution):
 		@type  batch_size: integer
 		@param batch_size: number of data points used for each L-BFGS update
 
-		@type  step_width: float
-		@param step_width: factor by which gradient is multiplied
-
 		@type  pocket: bool
 		@param pocket: if true, parameters are kept in case of performance degradation
 
@@ -508,24 +518,34 @@ class ISA(Distribution):
 		batch_size = kwargs.get('batch_size', Y.shape[1])
 		shuffle = kwargs.get('shuffle', True)
 		pocket = kwargs.get('pocket', shuffle)
+		weight_decay = kwargs.get('weight_decay', 0.)
+		max_stored = kwargs.get('max_stored', 10)
 
-		# objective function
+		# objective function and gradient
 		def f(W, X):
 			W = W.reshape(self.num_hiddens, self.num_hiddens)
-			return mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
+			v = mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
+
+			if weight_decay > 0.:
+				v += weight_decay / 2. * sum(square(inv(W)))
+			return v
 
 		# objective function gradient
 		def df(W, X):
 			W = W.reshape(self.num_hiddens, self.num_hiddens)
 			A = inv(W)
-			g = dot(self.prior_energy_gradient(dot(W, X)), X.T) / X.shape[1]
-			return (g - A.T).flatten()
+			g = dot(self.prior_energy_gradient(dot(W, X)), X.T) / X.shape[1] - A.T
 
-		# completed filter matrix
+			if weight_decay > 0.:
+				g -= weight_decay * dot(A.T, dot(A, A.T))
+
+			return g.flatten()
+
+		# complete basis
 		A = vstack([self.A, self.nullspace_basis()])
 		W = inv(A)
 
-		# completed data
+		# complete data
 		X = dot(A, Y)
 
 		if pocket:
@@ -541,8 +561,12 @@ class ISA(Distribution):
 				batch = X[:, i:i + batch_size]
 
 				if not batch.shape[1] < batch_size:
-					W, _, _ = fmin_l_bfgs_b(f, W.flatten(), df, (batch,), maxfun=max_fun,
-						disp=1 if Distribution.VERBOSITY > 2 else 0, iprint=0)
+					W, _, _ = fmin_l_bfgs_b(f, W.flatten(), df, (batch,),
+						maxfun=max_fun,
+						m=max_stored,
+						pgtol=1e-5,
+						disp=1 if Distribution.VERBOSITY > 2 else 0,
+						iprint=0)
 
 		if pocket:
 			# test for improvement of lower bound
@@ -595,6 +619,7 @@ class ISA(Distribution):
 		shuffle = kwargs.get('shuffle', True)
 		pocket = kwargs.get('pocket', shuffle)
 		train_noise = kwargs.get('train_noise', True)
+		weight_decay = kwargs.get('weight_decay', 0.)
 
 		if self.noise:
 			# reconstruct data points
@@ -610,7 +635,8 @@ class ISA(Distribution):
 			P = 0.
 
 			if pocket:
-				energy = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) - slogdet(S)[1]
+				energy = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) - slogdet(S)[1] \
+					+ weight_decay / 2. * sum(square(A))
 
 			for _ in range(max_iter):
 				if shuffle:
@@ -625,6 +651,10 @@ class ISA(Distribution):
 					Y_ = Y[:, i:i + batch_size]
 
 					P = momentum * P + dot(S, dot(X_ - dot(A, Y_), Y_.T)) / batch_size
+
+					if weight_decay > 0.:
+						P -= weight_decay * dot(A.T, dot(A, A.T))
+
 					A += step_width * P
 
 			if train_noise:
@@ -635,7 +665,8 @@ class ISA(Distribution):
 				C = dot(B, B.T)
 
 			if pocket:
-				energy_ = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) + slogdet(C)[1]
+				energy_ = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) + slogdet(C)[1] \
+					+ weight_decay / 2. * sum(square(A))
 
 				# test for improvement of lower bound
 				if energy_ > energy:
@@ -664,7 +695,8 @@ class ISA(Distribution):
 			P = 0.
 
 			if pocket:
-				energy = mean(self.prior_energy(Y)) - slogdet(W)[1]
+				energy = mean(self.prior_energy(Y)) - slogdet(W)[1] \
+					+ weight_decay / 2. * sum(square(A))
 
 			for j in range(max_iter):
 				if shuffle:
@@ -679,13 +711,18 @@ class ISA(Distribution):
 						P = momentum * P + A.T - \
 							dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size
 
+						if weight_decay > 0.:
+							P -= weight_decay * dot(A.T, dot(A, A.T))
+
 						# update parameters
 						W += step_width * P
 						A = inv(W)
 
 			if pocket:
 				# test for improvement of lower bound
-				if mean(self.prior_energy(dot(W, X))) - slogdet(W)[1] > energy:
+				energy_ = mean(self.prior_energy(dot(W, X))) - slogdet(W)[1] \
+					+ weight_decay / 2. * sum(square(A))
+				if energy_ > energy:
 					if Distribution.VERBOSITY > 0:
 						print 'No improvement.'
 
@@ -713,12 +750,12 @@ class ISA(Distribution):
 		step_width = kwargs.get('step_width', 1.)
 		momentum = kwargs.get('momentum', 0.)
 		shuffle = kwargs.get('shuffle', True)
-		noise_var = kwargs.get('noise_var', 0.005)
+		noise_var = kwargs.get('noise_var', 0.005)  # noise variance
 		alpha = kwargs.get('alpha', 0.02)
 		var_eta = kwargs.get('var_eta', 0.01)
 		var_goal = kwargs.get('var_goal', 0.1)
 		beta = kwargs.get('beta', 1.2) # strength of the prior
-		sigma = kwargs.get('sigma', 0.07) # noise standard deviation
+		sigma = kwargs.get('sigma', 0.07) # dispersion of prior
 		tol = kwargs.get('tol', 0.01)
 		callback = kwargs.get('callback', None)
 
