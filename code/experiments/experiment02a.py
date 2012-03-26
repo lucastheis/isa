@@ -19,13 +19,13 @@ mapp.max_processes = 8
 
 # PS, SS, ND, MI, NS, ML, LS, RG
 parameters = [
-	['8x8',   1, 100, 40, 32, 50, False, False],
-	['16x16', 1, 100, 80, 32, 50, False, False],
-	['8x8',   2, 100, 40, 32, 50, False, False],
-	['16x16', 2, 100, 80, 32, 50, False, False],
-	['8x8',   1, 100, 40, 32, 50, True,  False],
-	['16x16', 1, 100, 40, 32, 50, True,  False],
-	['8x8',   1, 100, 40, 32, 50, False, True],
+	['8x8',   1, 100,  40, 32, 50, False, False],
+	['16x16', 1, 100, 200, 32, 50, False, False],
+	['8x8',   2, 100,  40, 32, 50, False, False],
+	['16x16', 2, 100,  80, 32, 50, False, False],
+	['8x8',   1, 100,  40, 32, 50, True,  False],
+	['16x16', 1, 100,  40, 32, 50, True,  False],
+	['8x8',   1, 100,  40, 32, 50, False, True],
 ]
 
 def main(argv):
@@ -70,7 +70,7 @@ def main(argv):
 	# load data, log-transform and center data
 	data = load('data/vanhateren.{0}.preprocessed.npz'.format(patch_size))
 
-	data_train = data['data_train']
+	data_train = data['data_train'][:, :num_data]
 	data_test = data['data_test']
 	
 	# container for hierarchical model
@@ -100,14 +100,15 @@ def main(argv):
 
 		logjacobian += mean(rg.logjacobian(data_test[:, :num_data]))
 
-		data_train = rg(data_train[:, :num_data])
-		data_test = rg(data_test[:, :num_data])
+		data_train = rg(data_train)
+		data_test = rg(data_test)
 
 	for _ in range(max_layers):
 		model.append(ISA(data_train.shape[0], data_train.shape[0], ssize=ssize))
 		
 		# initialize, train and finetune model
 		model[-1].initialize(method='laplace')
+		model[-1].initialize(data_train)
 
 		model[-1].train(data_train[:, :20000], max_iter=20, method=('sgd', {'max_iter': 1}),
 				train_prior=False, train_subspaces=False)
@@ -115,21 +116,23 @@ def main(argv):
 		model[-1].train(data_train[:, :20000], max_iter=max_iter, method=('sgd', {'max_iter': 1}),
 				train_prior=True, train_subspaces=train_subspaces)
 
-		model[-1].train(data_train[:, :num_data], max_iter=10, method='lbfgs',
+		model[-1].train(data_train[:, :num_data], max_iter=25, method='lbfgs',
 				train_prior=True, train_subspaces=train_subspaces)
+
+		# evaluate hierarchical model on training and test data
+		loglik_train = model[-1].loglikelihood(data_train[:, :num_data]) + logjacobian
+		loglik_test = model[-1].loglikelihood(data_test[:, :num_data]) + logjacobian
+
+		print
+		print '{0:>2}, {1} [bit/pixel] (train)'.format(len(model), -mean(loglik_train) / data_train.shape[0] / log(2.))
+		print '{0:>2}, {1} [bit/pixel] (test)'.format(len(model), -mean(loglik_test) / data_train.shape[0] / log(2.))
+		print
 
 		# save model
 		experiment['num_layers'] = len(model)
+		experiment['loglik_train'] = loglik_train
+		experiment['loglik_test'] = loglik_test
 		experiment.save('results/experiment02a/experiment02a.{0}.{1}.xpck')
-
-		# evaluate hierarchical model on training data
-		loglik_train = mean(model[-1].loglikelihood(data_train[:, :num_data])) + logjacobian
-		loglik_test = mean(model[-1].loglikelihood(data_test[:, :num_data])) + logjacobian
-
-		print
-		print '{0:>2}, {1} [bit/pixel] (train)'.format(len(model), -loglik_train / data_train.shape[0] / log(2.))
-		print '{0:>2}, {1} [bit/pixel] (test)'.format(len(model), -loglik_test / data_train.shape[0] / log(2.))
-		print
 
 		# perform subspace Gaussianization on data and update Jacobian
 		sg = SubspaceGaussianization(model[-1])

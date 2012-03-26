@@ -9,7 +9,7 @@ sys.path.append('./code')
 from tools import Experiment, cifar
 from numpy import min, max, dot, sqrt, sum, square, argsort, sort, round
 from numpy.linalg import pinv
-from matplotlib.pyplot import clf, imshow, show
+from tools import imsave, imformat, stitch
 
 
 
@@ -27,30 +27,23 @@ def main(argv):
 
 	results = Experiment(argv[1])
 
-	wt, rg, sg = results['transforms'][:3]
+	wt, = results['transforms'][:1]
+	isa = results['model']
 
-	A = reconstruct(sg.isa.A, wt)
+	A = reconstruct(isa.A, wt)
 
 	# symmetrically whiten filters
-	wt, = Experiment('results/experiment05a/wt.xpck')['wt']
-	A = wt(A)
+#	wt, = Experiment('results/experiment05a/wt.xpck')['wt']
+#	A = wt(A)
 	
 	# sort and reshape filters
 	n = sqrt(sum(square(A), 0))
-	i = argsort(n)
+	i = argsort(n)[::-1]
 	A = A.T.reshape(-1, 32, 32, 3)
 	A = A[i]
+	A = A
 
-	# normalize filters
-
-	for i in range(A.shape[0]):
-		a = min(A[i])
-		b = max(A[i])
-		f = (A[i] - a) / (b - a)
-		clf()
-		print round(sort(sg.isa.subspaces[i].scales)[::-1], 2)
-		imshow(f, interpolation='nearest')
-		show()
+	imsave('/kyb/agmb/lucas/Projects/isa/results/experiment05a/cifar.png', stitch(imformat(A)))
 
 	return 0
 

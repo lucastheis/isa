@@ -12,6 +12,7 @@ from models import ISA, MoGaussian, StackedModel, ConcatModel, Distribution
 from tools import preprocess, Experiment, mapp, imsave, imformat, stitch
 from transforms import LinearTransform, WhiteningTransform
 from numpy import seterr, sqrt, dot, load
+from numpy.random import rand
 
 # controls parallelization
 mapp.max_processes = 8
@@ -26,16 +27,16 @@ parameters = [
 	['16x16', 1,   5, 10, True, False],
 
 	# overcomplete models
-	['8x8',   2, 100, 50, True, False],
-	['16x16', 2, 100, 50, True, False],
+	['8x8',   2, 200, 50, True, False],
+	['16x16', 2, 200, 50, True, False],
 
 	# overcomplete models with Laplace marginals
-	['8x8',   2, 100, 50, False, False],
-	['16x16', 2, 100, 50, False, False],
+	['8x8',   2, 200, 50, False, False],
+	['16x16', 2, 200, 50, False, False],
 
 	# initialize with sparse coding
-	['8x8',   2,   0, 50, True, True],
-	['16x16', 2,   0, 50, True, True],
+	['8x8',   2, 200, 50, True, True],
+	['16x16', 2, 200, 50, True, True],
 ]
 
 def main(argv):
@@ -78,7 +79,7 @@ def main(argv):
 
 	# load data, log-transform and center data
 	data = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
-	data = preprocess(data)
+	data = preprocess(data, noise_level=32)
 
 	# discrete cosine transform and whitening transform
 	dct = LinearTransform(dim=int(sqrt(data.shape[0])), basis='DCT')
@@ -108,24 +109,24 @@ def main(argv):
 		Saves intermediate results every few iterations.
 		"""
 
-		if not iteration % 1:
+		if not iteration % 5:
 			# whitened filters
 			A = dot(dct.A[1:].T, isa.A)
 
 			patch_size = int(sqrt(A.shape[0]) + 0.5)
 
 			# save intermediate results
-			experiment.save('results/vanhateren/results.{0}.{1}.{2}.xpck'.format(argv[1], phase, iteration))
+			experiment.save('results/vanhateren5/results.{0}.{1}.{2}.xpck'.format(argv[1], phase, iteration))
 
 			# visualize basis
-			imsave('results/vanhateren/basis.{0}.{1}.{2}.png'.format(argv[1], phase, iteration),
+			imsave('results/vanhateren5/basis.{0}.{1}.{2:0>3}.png'.format(argv[1], phase, iteration),
 				stitch(imformat(A.T.reshape(-1, patch_size, patch_size))))
 
 
 
 	# enable regularization of marginals
 	for gsm in isa.subspaces:
-		gsm.gamma = 1e-2
+		gsm.gamma = 1e-3
 		gsm.alpha = 2.
 		gsm.beta = 1.
 
@@ -138,11 +139,16 @@ def main(argv):
 
 	experiment.progress(10)
 
+
+
 	if sparse_coding:
+		isa.A = rand(*isa.A.shape) - 0.5
+		isa.orthogonalize()
+
 		# initialize with sparse coding
-		model.train(data[:, :20000], 1,
+		model.train(data[:, :50000], 1,
 			method=('of', {
-				'max_iter': 50,
+				'max_iter': max_iter,
 				'noise_var': 0.1,
 				'var_goal': 1.,
 				'beta': 10.,
@@ -157,8 +163,8 @@ def main(argv):
 			max_iter=max_iter,
 			train_prior=train_prior,
 			persistent=True,
-			init_sampling_steps=10,
-			method='lbfgs',
+			init_sampling_steps=5,
+			method=('sgd', {'momentum': 0.8}),
 			callback=lambda isa, iteration: callback(0, isa, iteration),
 			sampling_method=('gibbs', {'num_steps': 2}))
 
@@ -174,7 +180,7 @@ def main(argv):
 		train_prior=train_prior,
 		persistent=True,
 		init_sampling_steps=10 if sparse_coding or not train_prior else 50,
-		method='lbfgs',
+		method=('lbfgs', {'max_fun': 100}),
 		callback=lambda isa, iteration: callback(1, isa, iteration),
 		sampling_method=('gibbs', {'num_steps': 5}))
 

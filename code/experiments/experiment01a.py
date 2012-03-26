@@ -184,6 +184,7 @@ def main(argv):
 		
 	elif sparse_coding:
 		# initialize with sparse coding
+		model.initialize(data, 1)
 		model[1].model.train_of(wt(data[1:]),
 			max_iter=20,
 			noise_var=0.1,
@@ -194,13 +195,6 @@ def main(argv):
 		model[1].model.orthogonalize()
 
 	else:
-		# initialize with fixed marginal distributions
-#		model.train(data[:, :20000], 1,
-#			max_iter=200,
-#			train_prior=False,
-#			persistent=True,
-#			method=('analytic' if isa.noise else 'sgd', {'train_noise': False}), 
-#			sampling_method=('gibbs', {'num_steps': 2}))
 		model.initialize(data, 1)
 
 	# save intermediate results
@@ -224,36 +218,18 @@ def main(argv):
 	experiment.progress(50)
 	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
 
-	# disable regularization of the marginals
-#	for gsm in model[1].model.subspaces:
-#		gsm.gamma = 0.
-
-	# train using SGD with regularization turned off
-	model.train(data[:, :20000], 1,
-		max_iter=100, 
-		train_prior=train_prior,
-		train_subspaces=train_subspaces,
-		init_sampling_steps=10,
-		persistent=True,
-		method=('analytic' if isa.noise else 'sgd', {'train_noise': False}),
-		sampling_method=('gibbs', {'num_steps': num_steps}))
-
-	# save intermediate results
-	experiment.progress(75)
-	experiment.save('results/experiment01a/experiment01a.2.{0}.{1}.xpck')
-
 	if patch_size == '16x16' and overcompleteness > 1:
 		# prevent out-of-memory issues by disabling parallelization
 		mapp.max_processes = 1
 
 	# train using L-BFGS
 	model.train(data[:, :num_data], 1,
-		max_iter=20,
+		max_iter=40,
 		train_prior=train_prior,
 		train_subspaces=train_subspaces,
 		persistent=True,
 		init_sampling_steps=50,
-		method='lbfgs', 
+		method='lbfgs',
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 
 	# save results

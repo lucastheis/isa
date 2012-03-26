@@ -35,13 +35,19 @@ class Tests(unittest.TestCase):
 
 	def test_train(self):
 		isa = ISA(2, 2)
-		data = isa.sample(1000)
+		data = isa.sample_prior(1000)
 
-		# make sure SGD training doesn't throw any errors
+		# make sure training doesn't throw any exceptions
 		isa.train_sgd(data, max_iter=1)
-
-		# make sure L-BFGS training doesn't throw any errors
 		isa.train_lbfgs(data, max_fun=1)
+
+		isa = ISA(2, 2, noise=True)
+		data = isa.sample_prior(1000)
+
+		# make sure training doesn't throw any exeptions
+		isa.train_sgd(data, max_iter=1, weight_decay=0.01)
+		isa.train_analytic(data, max_iter=1, weight_decay=0.01)
+		isa.train_lbfgs(data, max_fun=1, weight_decay=0.01)
 	
 
 
