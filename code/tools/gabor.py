@@ -1,6 +1,7 @@
 from numpy import meshgrid, linspace, pi, exp, square, sin, cos, abs, sqrt
-from numpy import min, max
+from numpy import min, max, arctan2, argmax
 from numpy.random import rand
+from numpy.fft import fft2, fftshift
 
 def gaborf(size, complex=True, f=None, a=None, s=None, t=None, x=None, y=None, p=None):
 	"""
@@ -48,7 +49,7 @@ def gaborf(size, complex=True, f=None, a=None, s=None, t=None, x=None, y=None, p
 			linspace(-5 * scale, 5 * scale, sqrt(size)))
 	else:
 		xx, yy = meshgrid(
-			linspace(-5 * size[0] / 16., 5 * size[0] / 16., size[0]), 
+			linspace(-5 * size[0] / 16., 5 * size[0] / 16., size[0]),
 			linspace(-5 * size[1] / 16., 5 * size[1] / 16., size[1]))
 
 	# angle
@@ -89,3 +90,35 @@ def gaborf(size, complex=True, f=None, a=None, s=None, t=None, x=None, y=None, p
 	if isinstance(size, int):
 		return G.flatten()
 	return G
+
+
+
+def gaborfit(gabor):
+	"""
+	Find position and orientation of Gabor filters.
+	"""
+
+	if gabor.ndim < 2:
+		gabor = gabor.reshape(int(sqrt(gabors.shape[0]) + 0.5), -1)
+
+	y, Y = argmax(abs(gabor), 0), max(abs(gabor), 0)
+	x = argmax(Y)
+	y = y[x]
+
+	x = x - gabor.shape[0] / 2. + 1.
+	y = y - gabor.shape[1] / 2. + 1.
+	x = x * 10. / 16.
+	y = y * 10. / 16.
+
+	f = fftshift(fft2(gabor))
+
+	m, M = argmax(abs(f), 0), max(abs(f), 0)
+	n = argmax(M)
+	m = m[n]
+
+	m = m - gabor.shape[0] / 2
+	n = n - gabor.shape[1] / 2
+
+	t = arctan2(m, n)
+
+	return x, y, t
