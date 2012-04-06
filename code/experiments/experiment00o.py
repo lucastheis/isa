@@ -15,13 +15,13 @@ from transforms import LinearTransform, WhiteningTransform
 from tools import preprocess, Experiment, mapp
 
 mapp.max_processes = 8
-Distribution.VERBOSITY = 2
+Distribution.VERBOSITY = 1
 
 from numpy import round, sqrt, eye
 from numpy.linalg import svd
 
-patch_size = '16x16'
-num_data = 100000
+patch_size = '8x8'
+num_data = 50000
 noise_level = 32
 
 def main(argv):
@@ -51,7 +51,7 @@ def main(argv):
 	### MODEL DEFINITION
 
 	# create ICA model
-	ica = ICA(data.shape[0])
+	ica = ISA(data.shape[0])
 	ica.initialize(method='laplace')
 	ica.A = eye(data.shape[0])
 
@@ -61,9 +61,10 @@ def main(argv):
 
 	# train using L-BFGS
 	ica.train(data[:, :num_data],
-		max_iter=10,
+		max_iter=20,
 		train_prior=True,
-		train_basis=False)
+		train_basis=True,
+		method='lbfgs')
 
 
 

@@ -47,11 +47,11 @@ def main(argv):
 
 	isa.train_of(data,
 		max_iter=50,
-		noise_var=0.2,
+		noise_var=0.1,
 		var_goal=1.,
 		beta=10.,
 		step_width=0.001,
-		sigma=1.0,
+		sigma=2.0,#1.0,
 		callback=callback)
 
 	experiment.save('results/experiment05b/experiment05b.{0}.{1}.xpck')

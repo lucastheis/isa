@@ -1,3 +1,7 @@
+"""
+Train OICA on toy example of OICA.
+"""
+
 import sys
 
 sys.path.append('./code')

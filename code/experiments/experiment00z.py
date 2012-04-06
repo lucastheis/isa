@@ -1,3 +1,7 @@
+"""
+Test new version of Experiment class.
+"""
+
 import sys
 
 sys.path.append('./code')

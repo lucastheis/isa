@@ -78,7 +78,7 @@ def main(argv):
 	Y = dot(pinv(isa.A), X) + dot(pinv(isa.nullspace_basis()), Z)
 	E = isa.prior_energy(Y).reshape(*Z1.shape)[::-1]
 
-	imshow(log(exp(-E) + 1.), cmap='jet', limits=[-20, 20, -20, 20])
+	imshow(log(exp(-E) + 1.), cmap='jet', limits=[-10, 10, -10, 10])
 	plot(random_walk[0], random_walk[1], 'w.--', line_width=1.,
 		marker_size=1.2, marker_face_color='white', marker_edge_color='black')
 	xlabel('$z_1$')

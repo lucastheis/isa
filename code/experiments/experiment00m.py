@@ -1,3 +1,7 @@
+"""
+Train ICA on mixture of ICA toy example.
+"""
+
 import sys
 
 sys.path.append('./code')
