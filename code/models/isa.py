@@ -9,11 +9,11 @@ __docformat__ = 'epytext'
 from distribution import Distribution
 from numpy import *
 from numpy import min, max, round
-from numpy.random import randint, randn, rand, logseries, permutation
+from numpy.random import randint, randn, rand, logseries, permutation, gamma
 from numpy.linalg import svd, pinv, inv, det, slogdet, cholesky, eig
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b, fmin_cg, check_grad
-from scipy.stats import laplace, t, cauchy
+from scipy.stats import laplace, t, cauchy, exponpow
 from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi, sqrtm
 from warnings import warn
 from gsm import GSM
@@ -27,7 +27,7 @@ class ISA(Distribution):
 
 	global_time = 0
 
-	def __init__(self, num_visibles, num_hiddens=None, ssize=1, noise=False):
+	def __init__(self, num_visibles, num_hiddens=None, ssize=1, num_scales=10, noise=False):
 		"""
 		@type  num_visibles: integer
 		@param num_visibles: data dimensionality
@@ -37,6 +37,9 @@ class ISA(Distribution):
 
 		@type  ssize: integer
 		@param ssize: subspace dimensionality
+
+		@type  num_scales: integer
+		@param num_scales: number of scales of each subspace GSM
 
 		@type  noise: bool/ndarray
 		@param noise: add additional hidden units for noise
@@ -54,7 +57,7 @@ class ISA(Distribution):
 
 		# subspace densities
 		self.subspaces = [
-			GSM(ssize) for _ in range(int(num_hiddens) / int(ssize))]
+			GSM(ssize, num_scales) for _ in range(int(num_hiddens) / int(ssize))]
 
 		if mod(num_hiddens, ssize) > 0:
 			self.subspaces.append(GSM(mod(num_hiddens, ssize)))
@@ -127,16 +130,23 @@ class ISA(Distribution):
 			# initialize with Gaussian white noise
 			self.A = randn(num_visibles, num_hiddens)
 
-		elif method.lower() in ['laplace', 'student', 'cauchy']:
+		elif method.lower() in ['laplace', 'student', 'cauchy', 'exponpow']:
 			if method.lower() == 'laplace':
 				# approximate multivariate Laplace with GSM
 				samples = randn(self.subspaces[0].dim, 10000)
 				samples = samples / sqrt(sum(square(samples), 0))
 				samples = laplace.rvs(size=[1, 10000]) * samples
+
 			elif method.lower() == 'student':
-				samples = randn(self.subspaces[0].dim, 20000)
+				samples = randn(self.subspaces[0].dim, 50000)
 				samples = samples / sqrt(sum(square(samples), 0))
-				samples = t.rvs(2., size=[1, 20000]) * samples
+				samples = t.rvs(2., size=[1, 50000]) * samples
+
+			elif method.lower() == 'exponpow':
+				samples = randn(self.subspaces[0].dim, 200000)
+				samples = samples / sqrt(sum(square(samples), 0))
+				samples = gamma(2., 1., (1, 200000))**2. * samples
+
 			else:
 				samples = randn(self.subspaces[0].dim, 100000)
 				samples = samples / sqrt(sum(square(samples), 0))
@@ -150,6 +160,7 @@ class ISA(Distribution):
 				for m in self.subspaces[1:]:
 					m.scales = gsm.scales.copy()
 			else:
+				# approximate distribution with GSM
 				gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
 				gsm.train(samples, max_iter=200, tol=1e-8)
 
@@ -241,7 +252,7 @@ class ISA(Distribution):
 
 		if persistent and init_sampling_steps:
 			# initialize samples
-			sampling_method[1]['Z'] = self.sample_nullspace(X, 
+			sampling_method[1]['Z'] = self.sample_nullspace(X,
 				method=(sampling_method[0], dict(sampling_method[1], num_steps=init_sampling_steps)))
 
 		if adaptive and 'step_width' not in method[1]:
@@ -259,7 +270,7 @@ class ISA(Distribution):
 				# learn subspaces (M)
 				Y = self.train_subspaces(Y)
 
-			if not orthogonalize and (train_prior or train_subspaces):
+			if train_basis and train_prior and (not orthogonalize):
 				# normalize variances of marginals
 				self.normalize_prior()
 
@@ -307,8 +318,11 @@ class ISA(Distribution):
 		columns in `Y`.
 
 		@type  Y: array_like
-		@param Y: hidden states
+		@param Y: hidden stats
 		"""
+
+		max_iter = kwargs.get('max_iter', 10)
+		tol = kwargs.get('tol', 1e-7)
 
 		offset = [0]
 		for model in self.subspaces:
@@ -316,7 +330,7 @@ class ISA(Distribution):
 
 		def parfor(i):
 			model = self.subspaces[i]
-			model.train(Y[offset[i]:offset[i] + model.dim])
+			model.train(Y[offset[i]:offset[i] + model.dim], max_iter=max_iter, tol=tol)
 			return model
 		self.subspaces = mapp(parfor, range(len(self.subspaces)))
 
@@ -539,7 +553,7 @@ class ISA(Distribution):
 			if weight_decay > 0.:
 				g -= weight_decay * dot(A.T, dot(A, A.T))
 
-			return g.flatten()
+			return g.ravel()
 
 		# complete basis
 		A = vstack([self.A, self.nullspace_basis()])
@@ -561,7 +575,7 @@ class ISA(Distribution):
 				batch = X[:, i:i + batch_size]
 
 				if not batch.shape[1] < batch_size:
-					W, _, _ = fmin_l_bfgs_b(f, W.flatten(), df, (batch,),
+					W, _, _ = fmin_l_bfgs_b(f, W.ravel(), df, (batch,),
 						maxfun=max_fun,
 						m=max_stored,
 						pgtol=1e-5,
@@ -787,7 +801,7 @@ class ISA(Distribution):
 			def df(y, i):
 				y = y.reshape(-1, 1)
 				grad = (dot(AA, y) - Ax[:, [i]]) / noise_var + (2. * beta / sigma**2) * y / (1. + square(y / sigma))
-				return grad.flatten()
+				return grad.ravel()
 
 			# initial hidden states
 			Y = asshmarray(dot(A.T, X) / sum(square(A), 0).reshape(-1, 1))
@@ -1114,7 +1128,7 @@ class ISA(Distribution):
 			log_is_weights -= self.prior_energy(Y)
 
 			# Metropolis accept/reject step
-			reject = (rand(1, X.shape[1]) > exp(log_is_weights)).flatten()
+			reject = (rand(1, X.shape[1]) > exp(log_is_weights)).ravel()
 			Y[:, reject] = Y_old[:, reject]
 
 			if Distribution.VERBOSITY > 1:
@@ -1207,7 +1221,7 @@ class ISA(Distribution):
 			Hnew = self.prior_energy(Y) + sum(square(P), 0) / 2.
 
 			# Metropolis accept/reject step
-			reject = (rand(1, X.shape[1]) > exp(Hold - Hnew)).flatten()
+			reject = (rand(1, X.shape[1]) > exp(Hold - Hnew)).ravel()
 			Y[:, reject] = Yold[:, reject]
 
 			if Distribution.VERBOSITY > 1:
@@ -1246,7 +1260,7 @@ class ISA(Distribution):
 			Enew = self.prior_energy(WX + dot(B.T, Z))
 
 			# Metropolis accept/reject step
-			reject = (log(rand(1, Z.shape[1])) > Eold - Enew).flatten()
+			reject = (log(rand(1, Z.shape[1])) > Eold - Enew).ravel()
 			Z[:, reject] = Zold[:, reject]
 
 			if Distribution.VERBOSITY > 1:
@@ -1269,10 +1283,10 @@ class ISA(Distribution):
 		WX = dot(W, X)
 
 		def f(z, i):
-			return self.prior_energy(WX[:, [i]] + dot(V, z.reshape(-1, 1))).flatten()
+			return self.prior_energy(WX[:, [i]] + dot(V, z.reshape(-1, 1))).ravel()
 
 		def df(z, i):
-			return dot(V.T, self.prior_energy_gradient(WX[:, [i]] + dot(V, z.reshape(-1, 1)))).flatten()
+			return dot(V.T, self.prior_energy_gradient(WX[:, [i]] + dot(V, z.reshape(-1, 1)))).ravel()
 
 		# initial nullspace state
 		Z = asshmarray(zeros([self.num_hiddens - self.num_visibles, X.shape[1]]))
