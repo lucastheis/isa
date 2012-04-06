@@ -121,10 +121,10 @@ def main(argv):
 			patch_size = int(sqrt(A.shape[0]) + 0.5)
 
 			# save intermediate results
-			experiment.save('results/vanhateren4/results.{0}.{1}.{2}.xpck'.format(argv[1], phase, iteration))
+			experiment.save('results/vanhateren.{0}/results.{1}.{2}.xpck'.format(argv[1], phase, iteration))
 
 			# visualize basis
-			imsave('results/vanhateren4/basis.{0}.{1}.{2:0>3}.png'.format(argv[1], phase, iteration),
+			imsave('results/vanhateren.{0}/basis.{1}.{2:0>3}.png'.format(argv[1], phase, iteration),
 				stitch(imformat(A.T.reshape(-1, patch_size, patch_size))))
 
 
