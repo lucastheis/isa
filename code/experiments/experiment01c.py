@@ -11,7 +11,7 @@ from numpy import load, mean, log, min, max, std, sqrt
 from models import Distribution 
 
 Distribution.VERBOSITY = 0
-mapp.max_processes=10
+mapp.max_processes = 10
 
 def main(argv):
 	if len(argv) < 2:
@@ -20,14 +20,17 @@ def main(argv):
 
 	experiment = Experiment()
 
+	# range of data points evaluated
 	if len(argv) < 3:
-		indices = range(1000)
+		fr, to = 0, 1000
 	else:
 		if '-' in argv[2]:
 			fr, to = argv[2].split('-')
-			indices = range(int(fr), int(to))
+			fr, to = int(fr), int(to)
 		else:
-			indices = range(int(argv[2]))
+			fr, to = 0, int(argv[2])
+
+	indices = range(fr, to)
 
 	# load experiment with trained model
 	results = Experiment(argv[1])

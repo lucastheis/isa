@@ -621,6 +621,9 @@ class ISA(Distribution):
 		@type  train_noise: boolean
 		@param train_noise: whether or not to update the noise covariance
 
+		@type  natural_gradient: boolean
+		@param natural_gradient: if true, use "natural gradients" (default: False)
+
 		@rtype: bool
 		@return: false if no improvement could be achieved
 		"""
@@ -634,6 +637,7 @@ class ISA(Distribution):
 		pocket = kwargs.get('pocket', shuffle)
 		train_noise = kwargs.get('train_noise', True)
 		weight_decay = kwargs.get('weight_decay', 0.)
+		natural_gradient = kwargs.get('natural_gradient', False)
 
 		if self.noise:
 			# reconstruct data points
@@ -722,15 +726,19 @@ class ISA(Distribution):
 
 					if not batch.shape[1] < batch_size:
 						# calculate gradient
-						P = momentum * P + A.T - \
-							dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size
-
-						if weight_decay > 0.:
-							P -= weight_decay * dot(A.T, dot(A, A.T))
+						if natural_gradient:
+							P = momentum * P + W - \
+								dot(dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size, dot(W.T, W))
+						else:
+							P = momentum * P + A.T - \
+								dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size
+#
+#						if weight_decay > 0.:
+#							P -= weight_decay * dot(A.T, dot(A, A.T))
 
 						# update parameters
 						W += step_width * P
-						A = inv(W)
+#						A = inv(W)
 
 			if pocket:
 				# test for improvement of lower bound

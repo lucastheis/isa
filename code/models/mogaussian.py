@@ -139,7 +139,7 @@ class MoGaussian(Distribution):
 
 
 
-	def loglikelihood(self, data):
+	def loglikelihood(self, data, **kwargs):
 		# make sure data has right shape
 		data = asarray(data).reshape(1, -1)
 
