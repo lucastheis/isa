@@ -39,13 +39,13 @@ class StackedModel(Distribution):
 
 
 
-	def loglikelihood(self, data):
+	def loglikelihood(self, data, **kwargs):
 		loglik = zeros([1, data.shape[1]])
 
 		for transform in self.transforms:
-			loglik += transform.logjacobian(data)
+			loglik = transform.logjacobian(data)
 			data = transform(data)
 
-		loglik += self.model.loglikelihood(data)
+		loglik = loglik + self.model.loglikelihood(data, **kwargs)
 
 		return loglik

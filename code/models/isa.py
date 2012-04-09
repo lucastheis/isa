@@ -1357,7 +1357,7 @@ class ISA(Distribution):
 
 
 
-	def loglikelihood(self, X, num_samples=10, method='biased', sampling_method=('ais', {'num_steps': 10})):
+	def loglikelihood(self, X, num_samples=10, method='biased', sampling_method=('ais', {'num_steps': 10}), **kwargs):
 		"""
 		Computes the log-likelihood (in nats) for a set of data samples. If the model is overcomplete,
 		the log-likelihood is estimated using one of two importance sampling methods. The biased method
@@ -1377,9 +1377,14 @@ class ISA(Distribution):
 		@type  sampling_method: tuple
 		@param sampling_method: method and parameters to generate importance weights
 
+		@type  return_all: boolean
+		@param return_all: if true, return all important weights and don't average (default: False)
+
 		@rtype: ndarray
 		@return: the log-probability of each data point
 		"""
+
+		return_all = kwargs.get('return_all', False)
 
 		if self.num_hiddens == self.num_visibles:
 			return self.prior_loglikelihood(dot(inv(self.A), X)) - slogdet(self.A)[1]
@@ -1392,8 +1397,11 @@ class ISA(Distribution):
 					log_is_weights[i] = self.sample_posterior_ais(X, **sampling_method[1])[1]
 				mapp(parfor, range(num_samples))
 
-				# average importance weights to get likelihoods
-				return logmeanexp(log_is_weights, 0)
+				if return_all:
+					return asarray(log_is_weights)
+				else:
+					# average importance weights to get log-likelihoods
+					return logmeanexp(log_is_weights, 0)
 
 			elif method == 'unbiased':
 				loglik = empty(X.shape[1])
@@ -1437,7 +1445,10 @@ class ISA(Distribution):
 						# unbiased estimate of log-likelihood
 						loglik[indices] = log(c_) + log(1. - p_) * prod((c_ - exp(log_is_weights)) / (c_ * p_), 0)
 
-				return mean(loglik, 0).reshape(1, -1)
+				if return_all:
+					return loglik
+				else:
+					return mean(loglik, 0).reshape(1, -1)
 
 			else:
 				raise NotImplementedError('Unknown method \'{0}\'.'.format(method))
