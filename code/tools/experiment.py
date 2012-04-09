@@ -707,9 +707,9 @@ def main(argv):
 	# load experiment
 	experiment = Experiment(sys.argv[1])
 
-	if len(argv) > 2:
+	if len(argv) > 1:
 		# print arguments
-		for arg in argv[2:]:
+		for arg in argv[1:]:
 			try:
 				print experiment[arg]
 			except:
