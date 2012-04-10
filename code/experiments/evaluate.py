@@ -13,8 +13,8 @@ from models import Distribution
 Distribution.VERBOSITY = 0
 mapp.max_processes = 10
 
-NUM_AIS_SAMPLES = 10
-NUM_AIS_STEPS = 10
+NUM_AIS_SAMPLES = 200
+NUM_AIS_STEPS = 200
 
 def main(argv):
 	if len(argv) < 2:
