@@ -56,7 +56,7 @@ class ConcatModel(Distribution):
 		loglik = zeros([1, data.shape[1]])
 
 		for m in self.models:
-			loglik += m.loglikelihood(data[:m.dim], **kwargs)
+			loglik = loglik + m.loglikelihood(data[:m.dim], **kwargs)
 			data = data[m.dim:]
 
 		return loglik

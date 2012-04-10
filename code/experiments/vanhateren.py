@@ -11,7 +11,7 @@ sys.path.append('./code')
 from models import ISA, MoGaussian, StackedModel, ConcatModel, Distribution
 from tools import preprocess, Experiment, mapp, imsave, imformat, stitch
 from transforms import LinearTransform, WhiteningTransform
-from numpy import seterr, sqrt, dot, load
+from numpy import seterr, sqrt, dot, load, hstack, eye
 from numpy.random import rand
 
 # controls parallelization
@@ -27,13 +27,13 @@ parameters = [
 	['16x16', 1,   5, 10, True, False],
 
 	# overcomplete models
-	['8x8',   2, 200, 100, True, False],
-	['16x16', 2, 200, 100, True, False],
+	['8x8',   2, 1000, 100, True, False],
+	['16x16', 2, 1000, 100, True, False],
 
 	# overcomplete models with Laplace marginals
 	['8x8',   2, 200, 100, False, False],
 	['8x8',   2, 100, 100, False, True],
-	['16x16', 2, 200, 100, False, False],
+	['16x16', 2, 200, 100, False, True],
 
 	# initialize with sparse coding
 	['8x8',   2, 100, 100, True, True],
@@ -114,7 +114,7 @@ def main(argv):
 		Saves intermediate results every few iterations.
 		"""
 
-		if not iteration % 5:
+		if not iteration % 10:
 			# whitened filters
 			A = dot(dct.A[1:].T, isa.A)
 
@@ -168,7 +168,7 @@ def main(argv):
 			init_sampling_steps=5,
 			method=('sgd', {'momentum': 0.8}),
 			callback=lambda isa, iteration: callback(0, isa, iteration),
-			sampling_method=('gibbs', {'num_steps': 2}))
+			sampling_method=('gibbs', {'num_steps': 1}))
 
 	experiment.progress(50)
 
