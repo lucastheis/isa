@@ -934,6 +934,9 @@ class ISA(Distribution):
 		elif method[0].lower() in ['hmc', 'hamilton']:
 			return self.sample_posterior_hmc(X, **method[1])
 
+		elif method[0].lower() == 'mala':
+			return self.sample_posterior_mala(X, **method[1])
+
 		elif method[0].lower() == 'metropolis':
 			return self.sample_posterior_metropolis(X, **method[1])
 
@@ -1171,9 +1174,18 @@ class ISA(Distribution):
 		Samples posterior over hidden representations using Hamiltonian Monte
 		Carlo sampling.
 
+		@type  lf_num_steps: integer
+		@param lf_num_steps: number of leap-frog steps (default: 10)
+
+		@type  lf_step_size: float
+		@param lf_step_size: leap-frog step size (default: 0.01)
+
+		@type  lf_randomness: float
+		@param lf_randomness: relative jitter added to step size (default: 0.)
+
 		B{References:}
 			- Duane, A. (1987). I{Hybrid Monte Carlo.}
-			- Neal, R. (2010). I{MCMC Using Hamiltonian Dynamics}
+			- Neal, R. (2010). I{MCMC Using Hamiltonian Dynamics.}
 		"""
 
 		# hyperparameters
@@ -1216,6 +1228,52 @@ class ISA(Distribution):
 
 			# make sure hidden and visible states stay consistent
 			Y = WX + dot(BB, Y)
+
+			# new Hamiltonian
+			Hnew = self.prior_energy(Y) + sum(square(P), 0) / 2.
+
+			# Metropolis accept/reject step
+			reject = (rand(1, X.shape[1]) > exp(Hold - Hnew)).ravel()
+			Y[:, reject] = Yold[:, reject]
+
+			if Distribution.VERBOSITY > 1:
+				print '{0:6}\t{1:10.2f}\t{2:10.2f}'.format(step + 1,
+					mean(self.prior_energy(Y)),
+					mean(-reject))
+
+		return Y
+
+
+
+	def sample_posterior_mala(self, X, num_steps=100, Y=None, **kwargs):
+		"""
+		This is a special case of HMC sampling.
+		"""
+
+		step_width = kwargs.get('step_width', 0.01)
+
+		# nullspace basis and projection matrix
+		B = self.nullspace_basis()
+		BB = dot(B.T, B)
+
+		# filter responses
+		WX = dot(pinv(self.A), X)
+
+		# initial hidden state
+		Y = WX + dot(BB, Y) if Y is not None else \
+			WX + dot(BB, self.sample_prior(X.shape[1]))
+
+		for step in range(num_steps):
+			P = randn(B.shape[0], X.shape[1])
+
+			# store Hamiltonian
+			Yold = Y
+			Hold = self.prior_energy(Y) + sum(square(P), 0) / 2.
+
+			# generate proposal sample
+			P = P - step_width / 2. * dot(B, self.prior_energy_gradient(Y))
+			Y = WX + dot(BB, Y) + step_width * dot(B.T, P)
+			P = P - step_width / 2. * dot(B, self.prior_energy_gradient(Y))
 
 			# new Hamiltonian
 			Hnew = self.prior_energy(Y) + sum(square(P), 0) / 2.
