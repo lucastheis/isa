@@ -51,7 +51,7 @@ def main(argv):
 	## MODEL
 
 	isa = ISA(1, 3)
-	isa.initialize(method='student')
+	isa.initialize(method='exponpow')
 	isa.A[:] = [1.0, 0.8, 0.7]
 
 
@@ -59,7 +59,7 @@ def main(argv):
 	## MCMC TRACE
 
 	# visible state
-	X = zeros([isa.num_visibles, 1]) + 12.
+	X = zeros([isa.num_visibles, 1]) + 10.
 
 	random_walk = [isa.sample_posterior(X, method=('gibbs', {'num_steps': 20}))]
 	random_walk = [dot(pinv(isa.A), X)]
@@ -78,11 +78,12 @@ def main(argv):
 	Y = dot(pinv(isa.A), X) + dot(pinv(isa.nullspace_basis()), Z)
 	E = isa.prior_energy(Y).reshape(*Z1.shape)[::-1]
 
-	imshow(log(exp(-E) + 1.), cmap='jet', limits=[-10, 10, -10, 10])
+	imshow(exp(-E), cmap='jet', limits=[-20, 20, -20, 20])
 	plot(random_walk[0], random_walk[1], 'w.--', line_width=1.,
 		marker_size=1.2, marker_face_color='white', marker_edge_color='black')
 	xlabel('$z_1$')
 	ylabel('$z_2$')
+	axis('off')
 	title(titles[sampling_method])
 	gca().width = 10
 	gca().height = 10

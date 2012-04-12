@@ -1,5 +1,6 @@
 """
-Visualizes the null space. This will take a couple of minutes.
+Visualizes a one-dimensional null space distribution.
+This will take a couple of minutes.
 """
 
 import sys

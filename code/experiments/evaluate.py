@@ -13,15 +13,15 @@ from models import Distribution
 Distribution.VERBOSITY = 0
 mapp.max_processes = 10
 
-NUM_AIS_SAMPLES = 10
-NUM_AIS_STEPS = 10
+NUM_AIS_SAMPLES = 200
+NUM_AIS_STEPS = 200
 
 def main(argv):
 	if len(argv) < 2:
 		print 'Usage:', argv[0], '<experiment>', '[data_points]'
 		return 0
 
-	experiment = Experiment()
+	experiment = Experiment(server='10.38.138.150')
 
 	# range of data points evaluated
 	if len(argv) < 3:
