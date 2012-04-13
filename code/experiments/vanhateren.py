@@ -23,8 +23,8 @@ Distribution.VERBOSITY = 2
 # PS, OC, TI, FI, LP, SC
 parameters = [
 	# complete models
-	['8x8',   1,   5, 10, True, False],
-	['16x16', 1,   5, 10, True, False],
+	['8x8',   1,  20, 10, True, False],
+	['16x16', 1,  20, 10, True, False],
 
 	# overcomplete models
 	['8x8',   2, 1000, 100, True, False],
