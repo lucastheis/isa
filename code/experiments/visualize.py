@@ -11,6 +11,7 @@ from pgf import *
 from numpy import *
 from numpy import min, max
 from numpy.random import randn
+from scipy.stats import laplace
 
 RES = 2
 PERC = 99.5
@@ -20,6 +21,10 @@ def main(argv):
 
 	isa = experiment['model'].model[1].model
 	dct = experiment['model'].transforms[0]
+
+
+
+	### BASIS
 
 	# basis in pixel space
 	A = dot(dct.A[1:].T, isa.A)
@@ -48,6 +53,8 @@ def main(argv):
 
 
 
+	### SAMPLES
+
 	samples = experiment['model'].sample(128)
 
 	a = percentile(abs(samples).ravel(), PERC)
@@ -65,9 +72,10 @@ def main(argv):
 	title('Samples')
 	axis('off')
 	draw()
-	return
 
 
+	
+	### MARGINAL SOURCE DISTRIBUTIONS
 
 	figure()
 	samples = []
@@ -80,15 +88,16 @@ def main(argv):
 	for i in range(8):
 		for j in range(16):
 			try:
-				gsm = isa.subspaces[i * 16 + j]
+				gsm = isa.subspaces[i * (isa.num_hiddens + 1) / isa.num_visibles + j]
 			except:
 				pass
 			else:
 				subplot(7 - i, j, spacing=0)
+				plot(xvals, laplace.logpdf(xvals, scale=sqrt(0.5)).ravel(), 'k', opacity=0.5)
 				plot(xvals, gsm.loglikelihood(xvals.reshape(1, -1)).ravel(), 'b-', line_width=1.)
 				gca().width = 1
 				gca().height = 1
-				axis([-perc, perc, -5., 2.])
+				axis([-perc, perc, -6., 2.])
 				xtick([])
 				ytick([])
 	draw()

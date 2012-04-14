@@ -495,9 +495,8 @@ def main(argv):
 		Y = dot(pinv(ica.A), X)
 
 		# increase number of steps to reduce overhead
-		ica.sample_posterior(X, method=(method['method'], 
-			dict(method['parameters'], Y=Y, 
-				num_steps=method['parameters']['num_steps'] * NUM_STEPS_MULTIPLIER)))
+		ica.sample_posterior(X, method=(method['method'], dict(method['parameters'],
+			Y=Y, num_steps=method['parameters']['num_steps'] * NUM_STEPS_MULTIPLIER)))
 
 		# time required per transition operator application
 		duration = (time() - start) / NUM_STEPS_MULTIPLIER
