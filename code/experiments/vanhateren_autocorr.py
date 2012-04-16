@@ -23,7 +23,7 @@ NUM_SAMPLES = 200 # used to estimate time transition operator takes
 NUM_STEPS_MULTIPLIER = 5 # number of transition operator applications for estimating times
 NUM_AUTOCORR = 200 # number of posterior autocorrelation functions averaged
 NUM_CHAINS = 500 # number of chains used to estimate each autocorrelation function
-NUM_SECONDS = 60
+NUM_SECONDS = 90
 NUM_BURN_IN_STEPS = 100
 
 EXPERIMENT_PATH = 'results/vanhateren/vanhateren.7.08042012.150147.xpck'
@@ -33,17 +33,27 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_step_size': 0.075,
 			'lf_num_steps': 10,
-			'lf_randomness': 0.1,
+			'lf_randomness': 0.05,
 		},
 		'color': RGB(0.9, 0.0, 0.0),
 	},
 	{
-		'method': 'mala', 
+		'method': 'hmc', 
 		'parameters': {
 			'num_steps': 2,
+			'lf_step_size': 0.1,
+			'lf_num_steps': 20,
+			'lf_randomness': 0.1,
+		},
+		'color': RGB(0.0, 0.0, 0.0),
+	},
+	{
+		'method': 'mala', 
+		'parameters': {
+			'num_steps': 5,
 			'step_width': 0.1,
 		},
 		'color': RGB(0.4, 0.2, 0.0),
@@ -51,7 +61,7 @@ sampling_methods = [
 	{
 		'method': 'gibbs',
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 		},
 		'color': RGB(0.1, 0.6, 1.),
 	},

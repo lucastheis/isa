@@ -20,7 +20,7 @@ from tools import Experiment
 from copy import deepcopy
 
 NUM_SAMPLES = 200
-NUM_SECONDS = 60
+NUM_SECONDS = 90
 NUM_STEPS_MULTIPLIER = 5
 
 EXPERIMENT_PATH = 'results/vanhateren/vanhateren.7.08042012.150147.xpck'
@@ -30,7 +30,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 2,
 			'lf_step_size': 0.025,
 			'lf_randomness': 0.1,
@@ -40,7 +40,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 2,
 			'lf_step_size': 0.05,
 			'lf_randomness': 0.1,
@@ -50,7 +50,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 2,
 			'lf_step_size': 0.1,
 			'lf_randomness': 0.1,
@@ -60,7 +60,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 2,
 			'lf_step_size': 0.15,
 			'lf_randomness': 0.1,
@@ -70,7 +70,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.05,
 			'lf_randomness': 0.1,
@@ -80,7 +80,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.75,
 			'lf_randomness': 0.01,
@@ -90,7 +90,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.1,
 			'lf_randomness': 0.01,
@@ -100,7 +100,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.125,
 			'lf_randomness': 0.01,
@@ -110,7 +110,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.75,
 			'lf_randomness': 0.05,
@@ -120,7 +120,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.1,
 			'lf_randomness': 0.05,
@@ -130,7 +130,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.125,
 			'lf_randomness': 0.05,
@@ -140,7 +140,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.75,
 			'lf_randomness': 0.1,
@@ -150,7 +150,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.1,
 			'lf_randomness': 0.1,
@@ -160,7 +160,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 5,
 			'lf_step_size': 0.125,
 			'lf_randomness': 0.1,
@@ -170,7 +170,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.025,
 			'lf_randomness': 0.05,
@@ -180,7 +180,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.05,
 			'lf_randomness': 0.05,
@@ -190,7 +190,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.075,
 			'lf_randomness': 0.05,
@@ -200,7 +200,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.025,
 			'lf_randomness': 0.01,
@@ -210,7 +210,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.05,
 			'lf_randomness': 0.01,
@@ -220,7 +220,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.075,
 			'lf_randomness': 0.01,
@@ -230,7 +230,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.025,
 			'lf_randomness': 0.1,
@@ -240,7 +240,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.05,
 			'lf_randomness': 0.1,
@@ -250,7 +250,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.075,
 			'lf_randomness': 0.1,
@@ -260,7 +260,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.1,
 			'lf_randomness': 0.1,
@@ -270,7 +270,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 10,
 			'lf_step_size': 0.125,
 			'lf_randomness': 0.1,
@@ -280,7 +280,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 20,
 			'lf_step_size': 0.05,
 			'lf_randomness': 0.1,
@@ -290,7 +290,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 20,
 			'lf_step_size': 0.075,
 			'lf_randomness': 0.1,
@@ -300,7 +300,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 20,
 			'lf_step_size': 0.075,
 			'lf_randomness': 0.05,
@@ -310,7 +310,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 20,
 			'lf_step_size': 0.075,
 			'lf_randomness': 0.01,
@@ -320,7 +320,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 20,
 			'lf_step_size': 0.1,
 			'lf_randomness': 0.1,
@@ -330,7 +330,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 30,
 			'lf_step_size': 0.025,
 			'lf_randomness': 0.1,
@@ -340,7 +340,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 30,
 			'lf_step_size': 0.05,
 			'lf_randomness': 0.1,
@@ -350,7 +350,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 30,
 			'lf_step_size': 0.075,
 			'lf_randomness': 0.1,
@@ -360,7 +360,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 30,
 			'lf_step_size': 1.0,
 			'lf_randomness': 0.1,
@@ -370,7 +370,7 @@ sampling_methods = [
 	{
 		'method': 'hmc', 
 		'parameters': {
-			'num_steps': 1,
+			'num_steps': 2,
 			'lf_num_steps': 50,
 			'lf_step_size': 0.05,
 			'lf_randomness': 0.1,
@@ -380,7 +380,7 @@ sampling_methods = [
 	{
 		'method': 'mala', 
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 			'step_width': 0.05,
 		},
 		'color': RGB(0.8, 0.8, 0.8),
@@ -388,7 +388,7 @@ sampling_methods = [
 	{
 		'method': 'mala', 
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 			'step_width': 0.075,
 		},
 		'color': RGB(0.8, 0.8, 0.8),
@@ -396,7 +396,7 @@ sampling_methods = [
 	{
 		'method': 'mala', 
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 			'step_width': 0.0875,
 		},
 		'color': RGB(0.8, 0.8, 0.8),
@@ -404,7 +404,7 @@ sampling_methods = [
 	{
 		'method': 'mala', 
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 			'step_width': 0.1,
 		},
 		'color': RGB(0.8, 0.8, 0.8),
@@ -412,7 +412,7 @@ sampling_methods = [
 	{
 		'method': 'mala', 
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 			'step_width': 0.1125,
 		},
 		'color': RGB(0.8, 0.8, 0.8),
@@ -420,7 +420,7 @@ sampling_methods = [
 	{
 		'method': 'mala', 
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 			'step_width': 0.125,
 		},
 		'color': RGB(0.8, 0.8, 0.8),
@@ -428,7 +428,7 @@ sampling_methods = [
 	{
 		'method': 'mala', 
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 			'step_width': 0.15,
 		},
 		'color': RGB(0.8, 0.8, 0.8),
@@ -436,7 +436,7 @@ sampling_methods = [
 	{
 		'method': 'mala', 
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 			'step_width': 0.175,
 		},
 		'color': RGB(0.8, 0.8, 0.8),
@@ -444,7 +444,7 @@ sampling_methods = [
 	{
 		'method': 'mala', 
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 			'step_width': 0.2,
 		},
 		'color': RGB(0.8, 0.8, 0.8),
@@ -452,7 +452,7 @@ sampling_methods = [
 	{
 		'method': 'gibbs',
 		'parameters': {
-			'num_steps': 2,
+			'num_steps': 5,
 		},
 		'color': RGB(0.1, 0.6, 1.),
 	},
