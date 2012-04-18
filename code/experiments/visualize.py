@@ -13,7 +13,7 @@ from numpy import min, max
 from numpy.random import randn
 from scipy.stats import laplace
 
-RES = 2
+RES = 8
 PERC = 99.5
 
 def main(argv):
@@ -30,7 +30,8 @@ def main(argv):
 	A = dot(dct.A[1:].T, isa.A)
 
 	# sort by norm
-	A = A[:, argsort(sqrt(sum(square(A), 0)))[::-1]]
+	norms = sqrt(sum(square(A), 0))
+	A = A[:, argsort(norms)[::-1]]
 
 	# adjust intensity range
 	a = percentile(abs(A).ravel(), PERC)
@@ -49,6 +50,11 @@ def main(argv):
 	imshow(patches, dpi=75 * RES)
 	title('Basis (white)')
 	axis('off')
+	draw()
+
+	figure()
+	plot(sort(norms)[::-1])
+	title('Basis vector norms')
 	draw()
 
 
