@@ -172,7 +172,7 @@ class Experiment:
 				self.modified = pr2.communicate()[0]
 
 				if self.modified:
-					warn("Uncommitted changes.")
+					warn('Uncommitted changes.')
 			else:
 				# no git repository
 				self.commit = None
