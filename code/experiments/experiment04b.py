@@ -1,5 +1,5 @@
 """
-Visualize random walk in null space.
+Measure sampling performance.
 """
 
 import sys
@@ -26,28 +26,28 @@ parameters = {
 	'gibbs': {
 		'num_steps': 5,
 	},
-	'tempered': {
+	'mala': {
 		'num_steps': 1,
-		'annealing_weights': arange(0.998, 1., 0.0005),#arange(0.995, 1., 0.001)
+		'step_width': 0.05,
 	},
 	'hmc': {
 		'num_steps': 1,
 		'lf_step_size': 0.01,
-		'lf_num_steps': 80,
-		'lf_randomness': 0.1,
+		'lf_num_steps': 1,#80,
+		'lf_randomness': 0.,#0.1,
 	},
 }
 
 # number of transition operator applications
 num_steps = {
 	'gibbs': 40,
-	'tempered': 40,
+	'mala': 20,
 	'hmc': 20,
 }
 
 legend_entries = {
 	'gibbs': 'Gibbs',
-	'tempered': 'Tempered',
+	'mala': 'MALA',
 	'hmc': 'HMC',
 }
 
@@ -80,7 +80,7 @@ def main(argv):
 	## TIME MEASUREMENTS
 
 	# generate true hidden and visible states
-	Y = isa.sample_prior(1000)
+	Y = isa.sample_prior(4)
 	X = dot(isa.A, Y)
 
 	# energy sampling methods are expected to converge to
@@ -136,7 +136,7 @@ def main(argv):
 	ylabel('average energy')
 
 	savefig('convergence.tex')
-	draw()
+#	draw()
 
 	return 0
 

@@ -12,7 +12,7 @@ from numpy import *
 from numpy.random import randn
 from models import ISA, MoGaussian, StackedModel, ConcatModel, Distribution, GSM
 from transforms import LinearTransform, WhiteningTransform, RadialGaussianization
-from tools import preprocess, Experiment, mapp
+from tools import preprocess, Experiment, mapp, imsave, imformat, stitch
 
 mapp.max_processes = 8
 Distribution.VERBOSITY = 2
@@ -29,7 +29,7 @@ parameters = [
 	['16x16',   2, 1, 100,  40,   32,  0, False, False, True, False, False],
 
 	# overcomplete models
-	['8x8',     1, 2, 100, 200,   32,  5, False, False, True, False, False],
+	['8x8',     1, 2, 100, 200,   32,  5, False, False, False, False, False],
 	['8x8',     2, 2, 100, 400,   32,  5, False, False, True, False, False],
 	['16x16',   1, 2, 100, 200,   32,  5, False, False, True, False, False],
 
@@ -134,7 +134,7 @@ def main(argv):
 
 	if ssize == 1:
 		# initialize ISA marginals with Laplace distribution
-		isa.initialize(method='laplace')
+		isa.initialize(method='cauchy')
 
 
 
@@ -165,71 +165,38 @@ def main(argv):
 		gsm.alpha = 2.
 		gsm.beta = 1.
 
-	if len(argv) > 2:
-		# initialize ISA model with already trained model
-		results = Experiment(argv[2])
-	
-		model_ = results['model'] if isinstance(results['model'], ISA) \
-			else results['model'][1].model
+	# initialize ISA model with already trained model
+	results = Experiment(argv[2])
 
-		if model_.num_hiddens != isa.num_hiddens or \
-		   model_.num_visibles != isa.num_visibles:
-			raise ValueError('Specified model for initialization is incompatible with chosen parameters.')
+	model_ = results['model'] if isinstance(results['model'], ISA) \
+		else results['model'][1].model
 
-		model[1].model.A = model_.A
-		model[1].model.subspaces = model_.subspaces
+	if model_.num_hiddens != isa.num_hiddens or \
+	   model_.num_visibles != isa.num_visibles:
+		raise ValueError('Specified model for initialization is incompatible with chosen parameters.')
 
-		# free memory
-		del model_
-		
-	elif sparse_coding:
-		# initialize with sparse coding
-		model.initialize(data, 1)
-		model[1].model.train_of(wt(data[1:]),
-			max_iter=20,
-			noise_var=0.1,
-			var_goal=1.,
-			beta=10.,
-			step_width=0.01,
-			sigma=1.0)
-		model[1].model.orthogonalize()
+	model[1].model.A = model_.A
+	model[1].model.subspaces = model_.subspaces
 
-	else:
-		model.initialize(data, 1)
+	# free memory
+	del model_
 
-	# save intermediate results
-	experiment['parameters'] = parameters[int(argv[1])]
-	experiment['transforms'] = [dct, wt]
-	experiment['model'] = model
-	experiment.progress(25)
-	experiment.save('results/experiment01a/experiment01a.0.{0}.{1}.xpck')
-
-	# train using SGD with regularization turned on
-	model.train(data[:, :20000], 1,
-		max_iter=max_iter,
-		train_prior=train_prior,
-		train_subspaces=train_subspaces,
-		init_sampling_steps=10,
-		persistent=True,
-		method=('analytic' if isa.noise else 'sgd', {'train_noise': False}),
-		sampling_method=('gibbs', {'num_steps': 2}))
-
-	# save intermediate results
-	experiment.progress(50)
-	experiment.save('results/experiment01a/experiment01a.1.{0}.{1}.xpck')
-
-	if patch_size == '16x16' and overcompleteness > 1:
-		# prevent out-of-memory issues by disabling parallelization
-		mapp.max_processes = 1
+	def callback(isa, epoch):
+		if not epoch % 5:
+			if not epoch % 10:
+				experiment.progress(epoch / 10)
+			imsave('/kyb/agmb/lucas/Projects/isa/results/oica.{0}.png'.format(epoch),
+				stitch(imformat(dot(dct.A[1:].T, isa.A).T.reshape(-1, 8, 8))))
 
 	# train using L-BFGS
 	model.train(data[:, :num_data], 1,
-		max_iter=40,
+		max_iter=1000,
 		train_prior=train_prior,
 		train_subspaces=train_subspaces,
 		persistent=True,
 		init_sampling_steps=50,
-		method='lbfgs',
+		method='lbfgs', 
+		callback=callback,
 		sampling_method=('gibbs', {'num_steps': num_steps}))
 
 	# save results

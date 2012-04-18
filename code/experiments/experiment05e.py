@@ -9,7 +9,8 @@ sys.path.append('./code')
 from tools import Experiment, cifar
 from numpy import min, max, dot, sqrt, sum, square, argsort, sort, round
 from numpy.linalg import pinv
-from tools import imsave, imformat, stitch
+from matplotlib.pyplot import clf, imshow, show
+from tools import stitch, imformat, imsave
 
 
 
@@ -27,23 +28,20 @@ def main(argv):
 
 	results = Experiment(argv[1])
 
-	wt, = results['transforms'][:1]
-	isa = results['model']
+	# sample from top layer
+	X = results['model'].sample(100)
 
-	A = reconstruct(isa.A, wt)
+	# inverse hierarchical subspace Gaussianization
+	for sg in results['transforms'][2:-1]:
+		X = sg.inverse(X)
 
-	# symmetrically whiten filters
-#	wt, = Experiment('results/experiment05a/wt.xpck')['wt']
-#	A = wt(A)
-	
-	# sort and reshape filters
-	n = sqrt(sum(square(A), 0))
-	i = argsort(n)[::-1]
-	A = A.T.reshape(-1, 32, 32, 3)
-	A = A[i]
-	A = A
+	# inverse radial Gaussianization and whitening
+	X = reconstruct(X, *results['transforms'][:2])
+	X = X.T.reshape(-1, 32, 32, 3)
 
-	imsave('/kyb/agmb/lucas/Projects/isa/results/experiment05a/cifar.png', stitch(imformat(A)))
+	X = stitch(imformat(X), num_rows=10)
+
+	imsave('/Users/lucas/Desktop/samples.png', X)
 
 	return 0
 

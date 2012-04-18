@@ -1,5 +1,5 @@
 """
-Train OICA on toy example of OICA.
+Train ICA on mixture of ICA toy example.
 """
 
 import sys
@@ -19,18 +19,26 @@ PLOT_RANGE = 6
 NUM_SAMPLES = 20000
 
 def main(argv):
+	seed(2)
+
 	gsm = GSM(1, 4)
-	gsm.scales = array([0.1, 0.1, 0.1, 1.0])
+	gsm.scales = array([0.1, 1.0, 1.0, 1.0])
 	gsm.normalize()
 
-	isa1 = ISA(2, 4)
-	isa1.A[:, :2] = eye(2)
-	isa1.A[:, 2:] = array([[cos(pi/4.), -sin(pi/4.)], [sin(pi/4.), cos(pi/4.)]])
-	isa1.subspaces = [gsm, gsm, gsm, gsm]
-	
+	isa1 = ISA(2, 2)
+	isa1.A = eye(2) * 2.
+	isa1.subspaces = [gsm, gsm]
 
+	isa2 = ISA(2, 2)
+	isa2.A = array([[cos(pi/4.), -sin(pi/4.)], [sin(pi/4.), cos(pi/4.)]])
+	isa2.subspaces = [gsm, gsm]
 
-	data = isa1.sample(NUM_SAMPLES)
+	pr1 = 0.5
+
+	data = hstack([
+		isa1.sample(NUM_SAMPLES * pr1),
+		isa2.sample(NUM_SAMPLES * (1. - pr1))])
+	data = data[:, permutation(data.shape[1])]
 
 	figure()
 	plot(data[0, :10000], data[1, :10000], 'k.', opacity=0.1, marker_size=0.5)
@@ -38,7 +46,7 @@ def main(argv):
 	xlabel('$x_1$')
 	ylabel('$x_2$')
 	axis([-PLOT_RANGE, PLOT_RANGE, -PLOT_RANGE, PLOT_RANGE])
-#	draw()
+	draw()
 
 
 
@@ -46,8 +54,8 @@ def main(argv):
 		figure()
 		arrow(0, 0, isa1.A[0, 0], isa1.A[1, 0], 'k')
 		arrow(0, 0, isa1.A[0, 1], isa1.A[1, 1], 'k')
-		arrow(0, 0, isa1.A[0, 2], isa1.A[1, 2], 'k')
-		arrow(0, 0, isa1.A[0, 3], isa1.A[1, 3], 'k')
+		arrow(0, 0, isa2.A[0, 0], isa2.A[1, 0], 'k')
+		arrow(0, 0, isa2.A[0, 1], isa2.A[1, 1], 'k')
 		if isa.noise:
 			arrow(0, 0, isa.A[0, 0], isa.A[1, 0], 'b')
 			arrow(0, 0, isa.A[0, 1], isa.A[1, 1], 'b')
@@ -74,7 +82,7 @@ def main(argv):
 		method='lbfgs',
 		max_iter=50,
 		persistent=True,
-		sampling_method=('gibbs', {'num_steps': 5}),
+		sampling_method=('gibbs', {'num_steps': 2}),
 		callback=callback)
 #	isa.train_of(data, 
 #		max_iter=20,

@@ -20,11 +20,7 @@ mapp.max_processes = 1
 
 parameters = {
 	'gibbs': {
-		'num_steps': 4,
-	},
-	'tempered': {
 		'num_steps': 1,
-		'annealing_weights': arange(0.8, 1., 0.05)
 	},
 	'hmc': {
 		'num_steps': 4,
@@ -36,7 +32,6 @@ parameters = {
 titles = {
 	'gibbs': 'Gibbs sampling',
 	'hmc': 'HMC sampling',
-	'tempered': 'Gibbs sampling with tempered transitions'
 }
 
 def main(argv):
@@ -52,26 +47,19 @@ def main(argv):
 		sampling_method = 'gibbs'
 
 
+
 	## MODEL
 
-#	isa = ISA(1, 3)
-#	isa.initialize(method='student')
-#	isa.A[:] = 1.
-#	isa.A += randn(3) / 5.
-
 	isa = ISA(1, 3)
-	isa.initialize(method='student')
-	isa.A[:] = 0.8
-	isa.A += randn(3) / 10.
-#	for gsm in isa.subspaces:
-#		gsm.initialize(method='student')
+	isa.initialize(method='exponpow')
+	isa.A[:] = [1.0, 0.8, 0.7]
 
 
 
 	## MCMC TRACE
 
 	# visible state
-	X = zeros([isa.num_visibles, 1]) + 12.
+	X = zeros([isa.num_visibles, 1]) + 10.
 
 	random_walk = [isa.sample_posterior(X, method=('gibbs', {'num_steps': 20}))]
 	random_walk = [dot(pinv(isa.A), X)]
@@ -85,15 +73,17 @@ def main(argv):
 
 	## VISUALIZE
 
-	Z1, Z2 = meshgrid(linspace(-20, 20, 128), linspace(-20, 20, 128))
+	Z1, Z2 = meshgrid(linspace(-20, 20, 256), linspace(-20, 20, 256))
 	Z = vstack([Z1.flatten(), Z2.flatten()])
 	Y = dot(pinv(isa.A), X) + dot(pinv(isa.nullspace_basis()), Z)
 	E = isa.prior_energy(Y).reshape(*Z1.shape)[::-1]
 
-	imshow(exp(-E), limits=[-20, 20, -20, 20])
-	plot(random_walk[0], random_walk[1], 'w.--', markeredgewidth=0)
+	imshow(exp(-E), cmap='jet', limits=[-20, 20, -20, 20])
+	plot(random_walk[0], random_walk[1], 'w.--', line_width=1.,
+		marker_size=1.2, marker_face_color='white', marker_edge_color='black')
 	xlabel('$z_1$')
 	ylabel('$z_2$')
+	axis('off')
 	title(titles[sampling_method])
 	gca().width = 10
 	gca().height = 10

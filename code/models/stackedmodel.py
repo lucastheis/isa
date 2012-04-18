@@ -14,10 +14,18 @@ class StackedModel(Distribution):
 
 
 
-	def train(self, data, **kwargs):
+	def initialize(self, data=None, *args, **kwargs):
+		if data is not None:
+			for transform in self.transforms:
+				data = transform(data)
+		self.model.initialize(data, *args, **kwargs)
+
+
+
+	def train(self, data, *args, **kwargs):
 		for transform in self.transforms:
 			data = transform(data)
-		self.model.train(data, **kwargs)
+		self.model.train(data, *args, **kwargs)
 
 	
 
@@ -31,13 +39,13 @@ class StackedModel(Distribution):
 
 
 
-	def loglikelihood(self, data):
+	def loglikelihood(self, data, **kwargs):
 		loglik = zeros([1, data.shape[1]])
 
 		for transform in self.transforms:
-			loglik += transform.logjacobian(data)
+			loglik = transform.logjacobian(data)
 			data = transform(data)
 
-		loglik += self.model.loglikelihood(data)
+		loglik = loglik + self.model.loglikelihood(data, **kwargs)
 
 		return loglik

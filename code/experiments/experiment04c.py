@@ -1,5 +1,5 @@
 """
-Visualize random walk in null space.
+Plot performance of different sampling methods.
 """
 
 import sys
@@ -26,10 +26,6 @@ parameters = {
 	'gibbs': {
 		'num_steps': 1,
 	},
-	'tempered': {
-		'num_steps': 1,
-		'annealing_weights': arange(0.9, 1., 0.02)
-	},
 	'hmc': {
 		'num_steps': 1,
 		'lf_step_size': 0.01,
@@ -40,13 +36,11 @@ parameters = {
 # number of transition operator applications
 num_steps = {
 	'gibbs': 20,
-	'tempered': 10,
 	'hmc': 20,
 }
 
 legend_entries = {
 	'gibbs': 'Gibbs',
-	'tempered': 'Tempered',
 	'hmc': 'HMC',
 }
 
@@ -66,9 +60,8 @@ def main(argv):
 	## MODEL
 
 	isa = ISA(1, 3)
-#	isa.initialize(method='student')
-#	isa.A[:] = 1.
-#	isa.A += randn(3) / 5.
+	isa.initialize(method='student')
+	isa.A[:] = 1.
 	for gsm in isa.subspaces:
 		gsm.initialize(method='student')
 
@@ -77,7 +70,7 @@ def main(argv):
 	## TIME MEASUREMENTS
 
 	# generate true hidden and visible states
-	Y = isa.sample_prior(1000)
+	Y = isa.sample_prior(10000)
 	X = dot(isa.A, Y)
 
 	# energy sampling methods are expected to converge to
@@ -91,6 +84,7 @@ def main(argv):
 
 		start = time()
 		 
+		# sample without interruption
 		isa.sample_posterior(X, method=(sampling_method, params))
 
 		# measure time per transition operator application
@@ -98,8 +92,7 @@ def main(argv):
 
 
 
-
-	## MCMC SAMPLES
+	## GENERATE MCMC SAMPLES
 
 	energies = {}
 
@@ -121,16 +114,17 @@ def main(argv):
 
 		energies[sampling_method] = hstack(E)
 
+
+
 	## VISUALIZE
 
-	legent = []
+	legentries = []
 
 	for sampling_method in parameters:
 		times[sampling_method] = arange(len(energies[sampling_method])) * times[sampling_method]
 		plot(times[sampling_method], energies[sampling_method])
-		legent.append(legend_entries[sampling_method])
-#	legend(*legend_entries.values(), location='south east')
-	legend(*legent, location='south east')
+		legentries.append(legend_entries[sampling_method])
+	legend(*legentries, location='south east')
 
 	plot([0, max(hstack(times.values()))], [energy_exp, energy_exp], 'k--')
 

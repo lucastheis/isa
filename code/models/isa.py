@@ -9,22 +9,25 @@ __docformat__ = 'epytext'
 from distribution import Distribution
 from numpy import *
 from numpy import min, max, round
-from numpy.random import randint, randn, rand, logseries, permutation
+from numpy.random import randint, randn, rand, logseries, permutation, gamma
 from numpy.linalg import svd, pinv, inv, det, slogdet, cholesky, eig
 from scipy.linalg import solve
 from scipy.optimize import fmin_l_bfgs_b, fmin_cg, check_grad
-from scipy.stats import laplace, t
+from scipy.stats import laplace, t, cauchy, exponpow
 from tools import gaborf, mapp, logmeanexp, asshmarray, sqrtmi, sqrtm
 from warnings import warn
 from gsm import GSM
 from copy import deepcopy
+from time import time
 
 class ISA(Distribution):
 	"""
 	An implementation of overcomplete ISA using Gaussian scale mixtures.
 	"""
 
-	def __init__(self, num_visibles, num_hiddens=None, ssize=1, noise=False):
+	global_time = 0
+
+	def __init__(self, num_visibles, num_hiddens=None, ssize=1, num_scales=10, noise=False):
 		"""
 		@type  num_visibles: integer
 		@param num_visibles: data dimensionality
@@ -34,6 +37,9 @@ class ISA(Distribution):
 
 		@type  ssize: integer
 		@param ssize: subspace dimensionality
+
+		@type  num_scales: integer
+		@param num_scales: number of scales of each subspace GSM
 
 		@type  noise: bool/ndarray
 		@param noise: add additional hidden units for noise
@@ -51,7 +57,7 @@ class ISA(Distribution):
 
 		# subspace densities
 		self.subspaces = [
-			GSM(ssize) for _ in range(int(num_hiddens) / int(ssize))]
+			GSM(ssize, num_scales) for _ in range(int(num_hiddens) / int(ssize))]
 
 		if mod(num_hiddens, ssize) > 0:
 			self.subspaces.append(GSM(mod(num_hiddens, ssize)))
@@ -81,23 +87,33 @@ class ISA(Distribution):
 				if X.shape[1] < self.num_hiddens:
 					raise ValueError('Number of data points to small.')
 
-				elif X.shape[1] / 4 < self.num_hiddens:
-					self.A = X[:, permutation(X.shape[1])[:self.num_hiddens]]
-
 				else:
 					# whitening matrix
 					val, vec = eig(cov(X))
-					M = dot(diag(1. / val), vec.T)
+
+					# whiten data
+					X_ = dot(dot(diag(1. / sqrt(val)), vec.T), X)
 
 					# sort by norm in whitened space
-					indices = argsort(sqrt(sum(square(dot(M, X)), 0)))
+					indices = argsort(sqrt(sum(square(X_), 0)))[::-1]
 
-					# pick random subset
-					indices = indices[permutation(min([X.shape[1] / 4, 10000]))[:self.num_hiddens]]
+					# pick 25% largest data points and normalize
+					X_ = X_[:, indices[:max([X.shape[1] / 4, self.num_hiddens])]]
+					X_ = X_ / sqrt(sum(square(X_), 0))
 
-					self.A = X[:, indices]
+					# pick first basis vector at random
+					A = X_[:, [randint(X_.shape[1])]]
 
-				self.orthogonalize()
+					for _ in range(self.num_hiddens - 1):
+						# pick vector with large angle to all other vectors
+						A = hstack([
+							A, X_[:, [argmin(max(abs(dot(A.T, X_)), 0))]]])
+
+					# orthogonalize and unwhiten
+					A = dot(sqrtmi(dot(A, A.T)), A)
+					A = dot(dot(vec, diag(sqrt(val))), A)
+
+					self.A = A
 
 		elif method.lower() == 'gabor':
 			# initialize features with Gabor filters
@@ -114,16 +130,27 @@ class ISA(Distribution):
 			# initialize with Gaussian white noise
 			self.A = randn(num_visibles, num_hiddens)
 
-		elif method.lower() == 'laplace' or method.lower() == 'student':
+		elif method.lower() in ['laplace', 'student', 'cauchy', 'exponpow']:
 			if method.lower() == 'laplace':
 				# approximate multivariate Laplace with GSM
 				samples = randn(self.subspaces[0].dim, 10000)
 				samples = samples / sqrt(sum(square(samples), 0))
 				samples = laplace.rvs(size=[1, 10000]) * samples
-			else:
-				samples = randn(self.subspaces[0].dim, 10000)
+
+			elif method.lower() == 'student':
+				samples = randn(self.subspaces[0].dim, 50000)
 				samples = samples / sqrt(sum(square(samples), 0))
-				samples = t.rvs(2., size=[1, 10000]) * samples
+				samples = t.rvs(2., size=[1, 50000]) * samples
+
+			elif method.lower() == 'exponpow':
+				samples = randn(self.subspaces[0].dim, 200000)
+				samples = samples / sqrt(sum(square(samples), 0))
+				samples = gamma(2., 1., (1, 200000))**2. * samples
+
+			else:
+				samples = randn(self.subspaces[0].dim, 100000)
+				samples = samples / sqrt(sum(square(samples), 0))
+				samples = cauchy.rvs(size=[1, 100000]) * samples
 
 			if self.noise:
 				# ignore first subspace
@@ -133,6 +160,7 @@ class ISA(Distribution):
 				for m in self.subspaces[1:]:
 					m.scales = gsm.scales.copy()
 			else:
+				# approximate distribution with GSM
 				gsm = GSM(self.subspaces[0].dim, self.subspaces[0].num_scales)
 				gsm.train(samples, max_iter=200, tol=1e-8)
 
@@ -160,7 +188,7 @@ class ISA(Distribution):
 		@param max_iter: maximum number of iterations through the dataset
 
 		@type  method: tuple
-		@param method: optimization method used to optimize filters
+		@param method: optimization method used to optimize basis
 
 		@type  adative: bool
 		@param adaptive: automatically adjust step width when using SGD (default: True)
@@ -170,6 +198,9 @@ class ISA(Distribution):
 
 		@type  train_subspaces: bool
 		@param train_subspaces: automatically learn subspace sizes (default: False)
+
+		@type  train_basis: bool
+		@param train_basis: whether or not to optimize linear basis (default: True)
 
 		@type  orthogonalize: bool
 		@param orthogonalize: after each step, orthogonalize rows of feature matrix (default: False)
@@ -191,6 +222,7 @@ class ISA(Distribution):
 		adaptive = kwargs.get('adaptive', True) 
 		train_prior = kwargs.get('train_prior', True)
 		train_subspaces = kwargs.get('train_subspaces', False)
+		train_basis = kwargs.get('train_basis', True)
 		orthogonalize = kwargs.get('orthogonalize', False)
 		persistent = kwargs.get('persistent', True)
 		init_sampling_steps = kwargs.get('init_sampling_steps', 0)
@@ -205,20 +237,26 @@ class ISA(Distribution):
 		if isinstance(method, str):
 			method = (method, {})
 
+		if method[0].lower() == 'of':
+			# don't sample, use sparse coding
+			if callback:
+				method[1]['callback'] = callback
+			self.train_of(X, **method[1])
+			return
+
+		if callback:
+			callback(self, 0)
+
 		if isinstance(sampling_method, str):
 			sampling_method = (sampling_method, {})
 
 		if persistent and init_sampling_steps:
 			# initialize samples
-			sampling_method[1]['Z'] = self.sample_nullspace(X, 
-				method=(sampling_method[0], 
-					dict(sampling_method[1], num_steps=init_sampling_steps)))
+			sampling_method[1]['Z'] = self.sample_nullspace(X,
+				method=(sampling_method[0], dict(sampling_method[1], num_steps=init_sampling_steps)))
 
 		if adaptive and 'step_width' not in method[1]:
 			method[1]['step_width'] = 0.001
-
-		if callback:
-			callback(self, 0)
 
 		for i in range(max_iter):
 			# complete data (E)
@@ -232,7 +270,7 @@ class ISA(Distribution):
 				# learn subspaces (M)
 				Y = self.train_subspaces(Y)
 
-			if not orthogonalize and train_prior or train_subspaces:
+			if train_basis and train_prior and (not orthogonalize):
 				# normalize variances of marginals
 				self.normalize_prior()
 
@@ -241,25 +279,26 @@ class ISA(Distribution):
 				sampling_method[1]['Z'] = dot(self.nullspace_basis(), Y)
 
 			# optimize linear features (M)
-			if method[0].lower() == 'analytic':
-				self.train_analytic(Y, **method[1])
+			if train_basis:
+				if method[0].lower() == 'analytic':
+					self.train_analytic(Y, **method[1])
 
-			elif method[0].lower() == 'sgd':
-				improved = self.train_sgd(Y, **method[1])
+				elif method[0].lower() == 'sgd':
+					improved = self.train_sgd(Y, **method[1])
 
-				if adaptive:
-					# adjust learning rate
-					method[1]['step_width'] *= 1.1 if improved else 0.5
+					if adaptive:
+						# adjust learning rate
+						method[1]['step_width'] *= 1.1 if improved else 0.5
 
-			elif method[0].lower() == 'lbfgs':
-				self.train_lbfgs(Y, **method[1])
+				elif method[0].lower() == 'lbfgs':
+					self.train_lbfgs(Y, **method[1])
 
-			else:
-				raise ValueError('Unknown training method \'{0}\'.'.format(method[0]))
+				else:
+					raise ValueError('Unknown training method \'{0}\'.'.format(method[0]))
 
-			if orthogonalize:
-				# normalize feature matrix
-				self.orthogonalize()
+				if orthogonalize:
+					# normalize feature matrix
+					self.orthogonalize()
 
 			if callback:
 				callback(self, i + 1)
@@ -279,8 +318,11 @@ class ISA(Distribution):
 		columns in `Y`.
 
 		@type  Y: array_like
-		@param Y: hidden states
+		@param Y: hidden stats
 		"""
+
+		max_iter = kwargs.get('max_iter', 10)
+		tol = kwargs.get('tol', 1e-7)
 
 		offset = [0]
 		for model in self.subspaces:
@@ -288,9 +330,8 @@ class ISA(Distribution):
 
 		def parfor(i):
 			model = self.subspaces[i]
-			model.train(Y[offset[i]:offset[i] + model.dim])
+			model.train(Y[offset[i]:offset[i] + model.dim], max_iter=max_iter, tol=tol)
 			return model
-
 		self.subspaces = mapp(parfor, range(len(self.subspaces)))
 
 
@@ -300,7 +341,14 @@ class ISA(Distribution):
 		Normalizes the standard deviation of each subspace distribution.
 		"""
 
+		A = self.A
+
 		for gsm in self.subspaces:
+			# update basis
+			A[:, :gsm.dim] *= gsm.std()
+			A = A[:, gsm.dim:]
+
+			# update marginals
 			gsm.normalize()
 
 
@@ -467,9 +515,6 @@ class ISA(Distribution):
 		@type  batch_size: integer
 		@param batch_size: number of data points used for each L-BFGS update
 
-		@type  step_width: float
-		@param step_width: factor by which gradient is multiplied
-
 		@type  pocket: bool
 		@param pocket: if true, parameters are kept in case of performance degradation
 
@@ -487,24 +532,34 @@ class ISA(Distribution):
 		batch_size = kwargs.get('batch_size', Y.shape[1])
 		shuffle = kwargs.get('shuffle', True)
 		pocket = kwargs.get('pocket', shuffle)
+		weight_decay = kwargs.get('weight_decay', 0.)
+		max_stored = kwargs.get('max_stored', 10)
 
-		# objective function
+		# objective function and gradient
 		def f(W, X):
 			W = W.reshape(self.num_hiddens, self.num_hiddens)
-			return mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
+			v = mean(self.prior_energy(dot(W, X))) - slogdet(W)[1]
+
+			if weight_decay > 0.:
+				v += weight_decay / 2. * sum(square(inv(W)))
+			return v
 
 		# objective function gradient
 		def df(W, X):
 			W = W.reshape(self.num_hiddens, self.num_hiddens)
 			A = inv(W)
-			g = dot(self.prior_energy_gradient(dot(W, X)), X.T) / X.shape[1]
-			return (g - A.T).flatten()
+			g = dot(self.prior_energy_gradient(dot(W, X)), X.T) / X.shape[1] - A.T
 
-		# completed filter matrix
+			if weight_decay > 0.:
+				g -= weight_decay * dot(A.T, dot(A, A.T))
+
+			return g.ravel()
+
+		# complete basis
 		A = vstack([self.A, self.nullspace_basis()])
 		W = inv(A)
 
-		# completed data
+		# complete data
 		X = dot(A, Y)
 
 		if pocket:
@@ -520,8 +575,12 @@ class ISA(Distribution):
 				batch = X[:, i:i + batch_size]
 
 				if not batch.shape[1] < batch_size:
-					W, _, _ = fmin_l_bfgs_b(f, W.flatten(), df, (batch,), maxfun=max_fun,
-						disp=1 if Distribution.VERBOSITY > 2 else 0, iprint=0)
+					W, _, _ = fmin_l_bfgs_b(f, W.ravel(), df, (batch,),
+						maxfun=max_fun,
+						m=max_stored,
+						pgtol=1e-5,
+						disp=1 if Distribution.VERBOSITY > 2 else 0,
+						iprint=0)
 
 		if pocket:
 			# test for improvement of lower bound
@@ -574,6 +633,7 @@ class ISA(Distribution):
 		shuffle = kwargs.get('shuffle', True)
 		pocket = kwargs.get('pocket', shuffle)
 		train_noise = kwargs.get('train_noise', True)
+		weight_decay = kwargs.get('weight_decay', 0.)
 
 		if self.noise:
 			# reconstruct data points
@@ -589,7 +649,8 @@ class ISA(Distribution):
 			P = 0.
 
 			if pocket:
-				energy = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) - slogdet(S)[1]
+				energy = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) - slogdet(S)[1] \
+					+ weight_decay / 2. * sum(square(A))
 
 			for _ in range(max_iter):
 				if shuffle:
@@ -604,6 +665,10 @@ class ISA(Distribution):
 					Y_ = Y[:, i:i + batch_size]
 
 					P = momentum * P + dot(S, dot(X_ - dot(A, Y_), Y_.T)) / batch_size
+
+					if weight_decay > 0.:
+						P -= weight_decay * dot(A.T, dot(A, A.T))
+
 					A += step_width * P
 
 			if train_noise:
@@ -614,7 +679,8 @@ class ISA(Distribution):
 				C = dot(B, B.T)
 
 			if pocket:
-				energy_ = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) + slogdet(C)[1]
+				energy_ = mean(sqrt(sum(square(dot(inv(B), X - dot(A, Y))), 0))) + slogdet(C)[1] \
+					+ weight_decay / 2. * sum(square(A))
 
 				# test for improvement of lower bound
 				if energy_ > energy:
@@ -643,7 +709,8 @@ class ISA(Distribution):
 			P = 0.
 
 			if pocket:
-				energy = mean(self.prior_energy(Y)) - slogdet(W)[1]
+				energy = mean(self.prior_energy(Y)) - slogdet(W)[1] \
+					+ weight_decay / 2. * sum(square(A))
 
 			for j in range(max_iter):
 				if shuffle:
@@ -658,13 +725,18 @@ class ISA(Distribution):
 						P = momentum * P + A.T - \
 							dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size
 
+						if weight_decay > 0.:
+							P -= weight_decay * dot(A.T, dot(A, A.T))
+
 						# update parameters
 						W += step_width * P
 						A = inv(W)
 
 			if pocket:
 				# test for improvement of lower bound
-				if mean(self.prior_energy(dot(W, X))) - slogdet(W)[1] > energy:
+				energy_ = mean(self.prior_energy(dot(W, X))) - slogdet(W)[1] \
+					+ weight_decay / 2. * sum(square(A))
+				if energy_ > energy:
 					if Distribution.VERBOSITY > 0:
 						print 'No improvement.'
 
@@ -692,13 +764,14 @@ class ISA(Distribution):
 		step_width = kwargs.get('step_width', 1.)
 		momentum = kwargs.get('momentum', 0.)
 		shuffle = kwargs.get('shuffle', True)
-		noise_var = kwargs.get('noise_var', 0.005)
+		noise_var = kwargs.get('noise_var', 0.005)  # noise variance
 		alpha = kwargs.get('alpha', 0.02)
 		var_eta = kwargs.get('var_eta', 0.01)
 		var_goal = kwargs.get('var_goal', 0.1)
-		beta = kwargs.get('beta', 1.2)
-		sigma = kwargs.get('sigma', 0.07)
+		beta = kwargs.get('beta', 1.2) # strength of the prior
+		sigma = kwargs.get('sigma', 0.07) # dispersion of prior
 		tol = kwargs.get('tol', 0.01)
+		callback = kwargs.get('callback', None)
 
 		if self.noise:
 			# ignore model's noise covariance
@@ -728,7 +801,7 @@ class ISA(Distribution):
 			def df(y, i):
 				y = y.reshape(-1, 1)
 				grad = (dot(AA, y) - Ax[:, [i]]) / noise_var + (2. * beta / sigma**2) * y / (1. + square(y / sigma))
-				return grad.flatten()
+				return grad.ravel()
 
 			# initial hidden states
 			Y = asshmarray(dot(A.T, X) / sum(square(A), 0).reshape(-1, 1))
@@ -740,6 +813,9 @@ class ISA(Distribution):
 			return Y
 
 		A = A / sqrt(sum(square(A), 0))
+
+		if callback is not None:
+			callback(self, 0)
 
 		for i in range(max_iter):
 			if shuffle:
@@ -766,11 +842,14 @@ class ISA(Distribution):
 						print '{0:.4f} {1:.4f} {2:.4f}'.format(
 							float(min(Y_var)), float(mean(Y_var)), float(max(Y_var)))
 
-		if self.noise:
-			self.A[:, self.num_visibles:] = A
-		else:
-			self.A = A
-			
+			if self.noise:
+				self.A[:, self.num_visibles:] = A
+			else:
+				self.A = A
+
+			if callback is not None:
+				callback(self, i + 1)
+
 
 
 	def sample(self, num_samples=1):
@@ -854,6 +933,9 @@ class ISA(Distribution):
 
 		elif method[0].lower() in ['hmc', 'hamilton']:
 			return self.sample_posterior_hmc(X, **method[1])
+
+		elif method[0].lower() == 'mala':
+			return self.sample_posterior_mala(X, **method[1])
 
 		elif method[0].lower() == 'metropolis':
 			return self.sample_posterior_metropolis(X, **method[1])
@@ -1049,7 +1131,7 @@ class ISA(Distribution):
 			log_is_weights -= self.prior_energy(Y)
 
 			# Metropolis accept/reject step
-			reject = (rand(1, X.shape[1]) > exp(log_is_weights)).flatten()
+			reject = (rand(1, X.shape[1]) > exp(log_is_weights)).ravel()
 			Y[:, reject] = Y_old[:, reject]
 
 			if Distribution.VERBOSITY > 1:
@@ -1092,9 +1174,18 @@ class ISA(Distribution):
 		Samples posterior over hidden representations using Hamiltonian Monte
 		Carlo sampling.
 
+		@type  lf_num_steps: integer
+		@param lf_num_steps: number of leap-frog steps (default: 10)
+
+		@type  lf_step_size: float
+		@param lf_step_size: leap-frog step size (default: 0.01)
+
+		@type  lf_randomness: float
+		@param lf_randomness: relative jitter added to step size (default: 0.)
+
 		B{References:}
 			- Duane, A. (1987). I{Hybrid Monte Carlo.}
-			- Neal, R. (2010). I{MCMC Using Hamiltonian Dynamics}
+			- Neal, R. (2010). I{MCMC Using Hamiltonian Dynamics.}
 		"""
 
 		# hyperparameters
@@ -1142,7 +1233,53 @@ class ISA(Distribution):
 			Hnew = self.prior_energy(Y) + sum(square(P), 0) / 2.
 
 			# Metropolis accept/reject step
-			reject = (rand(1, X.shape[1]) > exp(Hold - Hnew)).flatten()
+			reject = (rand(1, X.shape[1]) > exp(Hold - Hnew)).ravel()
+			Y[:, reject] = Yold[:, reject]
+
+			if Distribution.VERBOSITY > 1:
+				print '{0:6}\t{1:10.2f}\t{2:10.2f}'.format(step + 1,
+					mean(self.prior_energy(Y)),
+					mean(-reject))
+
+		return Y
+
+
+
+	def sample_posterior_mala(self, X, num_steps=100, Y=None, **kwargs):
+		"""
+		This is a special case of HMC sampling.
+		"""
+
+		step_width = kwargs.get('step_width', 0.01)
+
+		# nullspace basis and projection matrix
+		B = self.nullspace_basis()
+		BB = dot(B.T, B)
+
+		# filter responses
+		WX = dot(pinv(self.A), X)
+
+		# initial hidden state
+		Y = WX + dot(BB, Y) if Y is not None else \
+			WX + dot(BB, self.sample_prior(X.shape[1]))
+
+		for step in range(num_steps):
+			P = randn(B.shape[0], X.shape[1])
+
+			# store Hamiltonian
+			Yold = Y
+			Hold = self.prior_energy(Y) + sum(square(P), 0) / 2.
+
+			# generate proposal sample
+			P = P - step_width / 2. * dot(B, self.prior_energy_gradient(Y))
+			Y = WX + dot(BB, Y) + step_width * dot(B.T, P)
+			P = P - step_width / 2. * dot(B, self.prior_energy_gradient(Y))
+
+			# new Hamiltonian
+			Hnew = self.prior_energy(Y) + sum(square(P), 0) / 2.
+
+			# Metropolis accept/reject step
+			reject = (rand(1, X.shape[1]) > exp(Hold - Hnew)).ravel()
 			Y[:, reject] = Yold[:, reject]
 
 			if Distribution.VERBOSITY > 1:
@@ -1181,7 +1318,7 @@ class ISA(Distribution):
 			Enew = self.prior_energy(WX + dot(B.T, Z))
 
 			# Metropolis accept/reject step
-			reject = (log(rand(1, Z.shape[1])) > Eold - Enew).flatten()
+			reject = (log(rand(1, Z.shape[1])) > Eold - Enew).ravel()
 			Z[:, reject] = Zold[:, reject]
 
 			if Distribution.VERBOSITY > 1:
@@ -1204,10 +1341,10 @@ class ISA(Distribution):
 		WX = dot(W, X)
 
 		def f(z, i):
-			return self.prior_energy(WX[:, [i]] + dot(V, z.reshape(-1, 1))).flatten()
+			return self.prior_energy(WX[:, [i]] + dot(V, z.reshape(-1, 1))).ravel()
 
 		def df(z, i):
-			return dot(V.T, self.prior_energy_gradient(WX[:, [i]] + dot(V, z.reshape(-1, 1)))).flatten()
+			return dot(V.T, self.prior_energy_gradient(WX[:, [i]] + dot(V, z.reshape(-1, 1)))).ravel()
 
 		# initial nullspace state
 		Z = asshmarray(zeros([self.num_hiddens - self.num_visibles, X.shape[1]]))
@@ -1278,7 +1415,7 @@ class ISA(Distribution):
 
 
 
-	def loglikelihood(self, X, num_samples=10, method='biased', sampling_method=('ais', {'num_steps': 10})):
+	def loglikelihood(self, X, num_samples=10, method='biased', sampling_method=('ais', {'num_steps': 10}), **kwargs):
 		"""
 		Computes the log-likelihood (in nats) for a set of data samples. If the model is overcomplete,
 		the log-likelihood is estimated using one of two importance sampling methods. The biased method
@@ -1298,9 +1435,14 @@ class ISA(Distribution):
 		@type  sampling_method: tuple
 		@param sampling_method: method and parameters to generate importance weights
 
+		@type  return_all: boolean
+		@param return_all: if true, return all important weights and don't average (default: False)
+
 		@rtype: ndarray
 		@return: the log-probability of each data point
 		"""
+
+		return_all = kwargs.get('return_all', False)
 
 		if self.num_hiddens == self.num_visibles:
 			return self.prior_loglikelihood(dot(inv(self.A), X)) - slogdet(self.A)[1]
@@ -1313,8 +1455,11 @@ class ISA(Distribution):
 					log_is_weights[i] = self.sample_posterior_ais(X, **sampling_method[1])[1]
 				mapp(parfor, range(num_samples))
 
-				# average importance weights to get likelihoods
-				return logmeanexp(log_is_weights, 0)
+				if return_all:
+					return asarray(log_is_weights)
+				else:
+					# average importance weights to get log-likelihoods
+					return logmeanexp(log_is_weights, 0)
 
 			elif method == 'unbiased':
 				loglik = empty(X.shape[1])
@@ -1358,7 +1503,10 @@ class ISA(Distribution):
 						# unbiased estimate of log-likelihood
 						loglik[indices] = log(c_) + log(1. - p_) * prod((c_ - exp(log_is_weights)) / (c_ * p_), 0)
 
-				return mean(loglik, 0).reshape(1, -1)
+				if return_all:
+					return loglik
+				else:
+					return mean(loglik, 0).reshape(1, -1)
 
 			else:
 				raise NotImplementedError('Unknown method \'{0}\'.'.format(method))

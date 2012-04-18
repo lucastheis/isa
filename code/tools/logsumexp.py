@@ -24,14 +24,14 @@ def logsumexp(x, ax=None):
 	"""
 
 	if ax is None:
-		x_max = max(x, ax)
+		x_max = max(x, ax) - 1.
 		return x_max + log(sum(exp(x - x_max)))
 
 	else:
 		x_max_shape = list(x.shape)
 		x_max_shape[ax] = 1
 
-		x_max = asarray(max(x, ax))
+		x_max = asarray(max(x, ax)) - 1.
 		return x_max + log(sum(exp(x - x_max.reshape(x_max_shape)), ax))
 
 

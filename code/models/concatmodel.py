@@ -34,6 +34,19 @@ class ConcatModel(Distribution):
 
 
 
+	def initialize(self, data=None, model=None, **kwargs):
+		if data is None:
+			for i, m in enumerate(self.models):
+				if model is None or model == i:
+					m.initialize(**kwargs)
+		else:
+			for i, m in enumerate(self.models):
+				if model is None or model == i:
+					m.initialize(data[:m.dim], **kwargs)
+				data = data[m.dim:]
+
+
+
 	def sample(self, num_samples=1):
 		return vstack(m.sample(num_samples) for m in self.models)
 
@@ -43,7 +56,7 @@ class ConcatModel(Distribution):
 		loglik = zeros([1, data.shape[1]])
 
 		for m in self.models:
-			loglik += m.loglikelihood(data[:m.dim], **kwargs)
+			loglik = loglik + m.loglikelihood(data[:m.dim], **kwargs)
 			data = data[m.dim:]
 
 		return loglik
