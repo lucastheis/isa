@@ -15,14 +15,14 @@ BAR_WIDTH = 0.7
 
 gaussian = {
 	'label': '1x', 
-	'path': 'results/vanhateren/gaussian.xpck',
+	'path': 'results/vanhateren/gsm.0.20042012.112721.xpck',
 	'color': RGB(0., 0., 0.),
 	'fill': RGB(1., 1., 1.),
 }
 
 gsm = {
 	'label': '1x', 
-	'path': 'results/vanhateren/gsm.xpck',
+	'path': 'results/vanhateren/gsm.6.20042012.113532.xpck',
 	'color': RGB(0., 0., 0.),
 	'fill': RGB(1., 1., 1.),
 	'pattern': 'crosshatch dots',
@@ -79,7 +79,7 @@ def main(argv):
 
 	# find intersection of data points
 	indices = [model['indices'] for model in linear_models]
-	indices = set(indices[0]).intersection(*indices[1:])
+	indices = list(set(indices[0]).intersection(*indices[1:]))
 
 	# use importance weights to estimate log-likelihood
 	for idx, model in enumerate(linear_models):
@@ -98,7 +98,7 @@ def main(argv):
 			bar_width=BAR_WIDTH,
 			pgf_options=['forget plot', 'nodes near coords'])
 
-	bar(4, 1.0,
+	bar(4, 0.9,
 		labels='?',
 		color=linear_models[1]['color'],
 		fill=linear_models[1]['fill'],
@@ -109,7 +109,7 @@ def main(argv):
 
 	# PRODUCT OF EXPERTS
 
-	bar(5, 1.0,
+	bar(5, 0.9,
 		labels='?',
 		color=poe['color'],
 		fill=poe['fill'],
@@ -120,7 +120,11 @@ def main(argv):
 
 	# GAUSSIAN SCALE MIXTURE
 
-	bar(6, 1.35,
+	results = Experiment(gsm['path'])
+	gsm['loglik_mean'] = mean(results['logliks'][:, indices])
+	gsm['loglik_sem'] = std(results['logliks'][:, indices], ddof=1) / sqrt(len(indices))
+
+	bar(6, gsm['loglik_mean'], yerr=gsm['loglik_sem'],
 		color=gsm['color'],
 		fill=gsm['fill'],
 		bar_width=BAR_WIDTH,
@@ -131,7 +135,11 @@ def main(argv):
 
 	# GAUSSIAN
 
-	bar(0, 1.0,
+	results = Experiment(gaussian['path'])
+	gaussian['loglik_mean'] = mean(results['logliks'][:, indices])
+	gaussian['loglik_sem'] = std(results['logliks'][:, indices], ddof=1) / sqrt(len(indices))
+
+	bar(0, gaussian['loglik_mean'], yerr=gaussian['loglik_sem'],
 		color=gaussian['color'],
 		fill=gaussian['fill'],
 		bar_width=BAR_WIDTH,
@@ -144,8 +152,8 @@ def main(argv):
 		[gsm['label']])
 	xlabel('Overcompleteness')
 	ylabel('Log-likelihood $\pm$ SEM [bit/pixel]')
-	axis(width=8, height=6)
-	axis([-0.5, 6.5, 0.95, 1.45])
+	axis(width=8, height=6, ytick_align='outside', pgf_options=['xtick style={color=white}'])
+	axis([-0.5, 6.5, 0.85, 1.55])
 	title('8 $\\times$ 8 image patches')
 
 	subplot(0, 1)
@@ -153,8 +161,8 @@ def main(argv):
 	xtick([0, 1, 2, 3, 4], ['1x', '1x', '2x', '2x', '1x'])
 	xlabel('Overcompleteness')
 	ylabel('Log-likelihood $\pm$ SEM [bit/pixel]')
-	axis(width=5.7, height=6)
-	axis([-0.5, 4.5, 0.95, 1.45])
+	axis(width=5.7, height=6, ytick_align='outside', pgf_options=['xtick style={color=white}'])
+	axis([-0.5, 4.5, 0.85, 1.55])
 	title('16 $\\times$ 16 image patches')
 
 	# dummy plots
@@ -167,6 +175,7 @@ def main(argv):
 	legend('Gaussian', 'ICA', 'OICA', 'PoE', 'GSM', location='outer north east')
 
 	gcf().margin = 4
+	gcf().save('/Users/lucas/Desktop/comparison.tex')
 	draw()
 
 	return 0
