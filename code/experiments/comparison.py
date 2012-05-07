@@ -11,18 +11,18 @@ from glob import glob
 from numpy import *
 from pgf import *
 
-BAR_WIDTH = 0.7
+BAR_WIDTH = 0.5
 
 gaussian = {
 	'label': '1x', 
-	'path': 'results/vanhateren/gaussian.xpck',
+	'path': 'results/vanhateren/gsm.0.20042012.112721.xpck',
 	'color': RGB(0., 0., 0.),
 	'fill': RGB(1., 1., 1.),
 }
 
 gsm = {
 	'label': '1x', 
-	'path': 'results/vanhateren/gsm.xpck',
+	'path': 'results/vanhateren/gsm.6.20042012.113532.xpck',
 	'color': RGB(0., 0., 0.),
 	'fill': RGB(1., 1., 1.),
 	'pattern': 'crosshatch dots',
@@ -79,7 +79,7 @@ def main(argv):
 
 	# find intersection of data points
 	indices = [model['indices'] for model in linear_models]
-	indices = set(indices[0]).intersection(*indices[1:])
+	indices = list(set(indices[0]).intersection(*indices[1:]))
 
 	# use importance weights to estimate log-likelihood
 	for idx, model in enumerate(linear_models):
@@ -96,9 +96,12 @@ def main(argv):
 			color=model['color'], 
 			fill=model['fill'],
 			bar_width=BAR_WIDTH,
-			pgf_options=['forget plot', 'nodes near coords'])
+			pgf_options=[
+				'forget plot',
+				'nodes near coords', 
+				'every node near coord/.style={yshift=0.05cm,font=\\footnotesize}'])
 
-	bar(4, 1.0,
+	bar(4, 0.9,
 		labels='?',
 		color=linear_models[1]['color'],
 		fill=linear_models[1]['fill'],
@@ -109,7 +112,7 @@ def main(argv):
 
 	# PRODUCT OF EXPERTS
 
-	bar(5, 1.0,
+	bar(5, 0.9,
 		labels='?',
 		color=poe['color'],
 		fill=poe['fill'],
@@ -120,42 +123,67 @@ def main(argv):
 
 	# GAUSSIAN SCALE MIXTURE
 
-	bar(6, 1.35,
+	results = Experiment(gsm['path'])
+	gsm['loglik_mean'] = mean(results['logliks'][:, indices])
+	gsm['loglik_sem'] = std(results['logliks'][:, indices], ddof=1) / sqrt(len(indices))
+
+	bar(6, gsm['loglik_mean'], yerr=gsm['loglik_sem'],
 		color=gsm['color'],
 		fill=gsm['fill'],
 		bar_width=BAR_WIDTH,
 		pattern=gsm['pattern'],
-		pgf_options=['forget plot', 'nodes near coords'])
+		pgf_options=[
+			'forget plot',
+			'nodes near coords',
+			'every node near coord/.style={yshift=0.05cm, font=\\footnotesize}'])
 	
 
 
 	# GAUSSIAN
 
-	bar(0, 1.0,
+	results = Experiment(gaussian['path'])
+	gaussian['loglik_mean'] = mean(results['logliks'][:, indices])
+	gaussian['loglik_sem'] = std(results['logliks'][:, indices], ddof=1) / sqrt(len(indices))
+
+	bar(0, gaussian['loglik_mean'], yerr=gaussian['loglik_sem'],
 		color=gaussian['color'],
 		fill=gaussian['fill'],
 		bar_width=BAR_WIDTH,
-		pgf_options=['nodes near coords'])
+		pgf_options=['nodes near coords', 'every node near coord/.style={yshift=0.05cm, font=\\footnotesize}'])
 
 	xtick(range(len(linear_models) + 4), 
 		[gaussian['label']] + \
 		[model['label'] for model in linear_models] + ['4x'] + \
 		[poe['label']] + \
 		[gsm['label']])
-	xlabel('Overcompleteness')
-	ylabel('Log-likelihood $\pm$ SEM [bit/pixel]')
-	axis(width=8, height=6)
-	axis([-0.5, 6.5, 0.95, 1.45])
-	title('8 $\\times$ 8 image patches')
+	ytick([0.9, 1.1, 1.3, 1.5])
+	xlabel(r'\small Overcompleteness')
+	ylabel(r'\small Log-likelihood $\pm$ SEM [bit/pixel]')
+	axis(
+		width=5,
+		height=4,
+		ytick_align='outside',
+		pgf_options=['xtick style={color=white}', r'tick label style={font=\footnotesize}'])
+			
+	
+	axis([-0.5, 6.5, 0.85, 1.55])
+	title(r'\small 8 $\times$ 8 image patches')
+
+
 
 	subplot(0, 1)
 
 	xtick([0, 1, 2, 3, 4], ['1x', '1x', '2x', '2x', '1x'])
-	xlabel('Overcompleteness')
-	ylabel('Log-likelihood $\pm$ SEM [bit/pixel]')
-	axis(width=5.7, height=6)
-	axis([-0.5, 4.5, 0.95, 1.45])
-	title('16 $\\times$ 16 image patches')
+	ytick([0.9, 1.1, 1.3, 1.5])
+	xlabel(r'\small Overcompleteness')
+	ylabel(r'\small Log-likelihood $\pm$ SEM [bit/pixel]')
+	axis(
+		width=3.6,
+		height=4,
+		ytick_align='outside',
+		pgf_options=['xtick style={color=white}', r'tick label style={font=\footnotesize}'])
+	axis([-0.5, 4.5, 0.85, 1.55])
+	title(r'\small 16 $\times$ 16 image patches')
 
 	# dummy plots
 	bar(-1, 0, color=gaussian['color'], fill=gaussian['fill'], bar_width=BAR_WIDTH)
@@ -167,6 +195,7 @@ def main(argv):
 	legend('Gaussian', 'ICA', 'OICA', 'PoE', 'GSM', location='outer north east')
 
 	gcf().margin = 4
+	gcf().save('results/vanhateren/comparison.tex')
 	draw()
 
 	return 0

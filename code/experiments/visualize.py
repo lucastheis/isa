@@ -31,7 +31,8 @@ def main(argv):
 
 	# sort by norm
 	norms = sqrt(sum(square(A), 0))
-	A = A[:, argsort(norms)[::-1]]
+	indices = argsort(norms)[::-1]
+	A = A[:, indices]
 
 	# adjust intensity range
 	a = percentile(abs(A).ravel(), PERC)
@@ -54,6 +55,8 @@ def main(argv):
 
 	figure()
 	plot(sort(norms)[::-1])
+	gca().ymin = 0
+	gca().ymax = 1
 	title('Basis vector norms')
 	gca().ymin = 0
 	gca().ymax = 1
@@ -96,7 +99,7 @@ def main(argv):
 	for i in range(8):
 		for j in range(16):
 			try:
-				gsm = isa.subspaces[i * (isa.num_hiddens + 1) / isa.num_visibles + j]
+				gsm = isa.subspaces[indices[i * (isa.num_hiddens + 1) / isa.num_visibles + j]]
 			except:
 				pass
 			else:
