@@ -11,8 +11,9 @@ from pgf import *
 from numpy import *
 from numpy import min, max
 from numpy.random import randn
+from scipy.stats import laplace
 
-RES = 2
+RES = 8
 PERC = 99.5
 
 def main(argv):
@@ -21,11 +22,17 @@ def main(argv):
 	isa = experiment['model'].model[1].model
 	dct = experiment['model'].transforms[0]
 
+
+
+	### BASIS
+
 	# basis in pixel space
 	A = dot(dct.A[1:].T, isa.A)
 
 	# sort by norm
-	A = A[:, argsort(sqrt(sum(square(A), 0)))[::-1]]
+	norms = sqrt(sum(square(A), 0))
+	indices = argsort(norms)[::-1]
+	A = A[:, indices]
 
 	# adjust intensity range
 	a = percentile(abs(A).ravel(), PERC)
@@ -46,7 +53,18 @@ def main(argv):
 	axis('off')
 	draw()
 
+	figure()
+	plot(sort(norms)[::-1])
+	gca().ymin = 0
+	gca().ymax = 1
+	title('Basis vector norms')
+	gca().ymin = 0
+	gca().ymax = 1
+	draw()
 
+
+
+	### SAMPLES
 
 	samples = experiment['model'].sample(128)
 
@@ -65,9 +83,10 @@ def main(argv):
 	title('Samples')
 	axis('off')
 	draw()
-	return
 
 
+	
+	### MARGINAL SOURCE DISTRIBUTIONS
 
 	figure()
 	samples = []
@@ -80,15 +99,16 @@ def main(argv):
 	for i in range(8):
 		for j in range(16):
 			try:
-				gsm = isa.subspaces[i * 16 + j]
+				gsm = isa.subspaces[indices[i * (isa.num_hiddens + 1) / isa.num_visibles + j]]
 			except:
 				pass
 			else:
 				subplot(7 - i, j, spacing=0)
+				plot(xvals, laplace.logpdf(xvals, scale=sqrt(0.5)).ravel(), 'k', opacity=0.5)
 				plot(xvals, gsm.loglikelihood(xvals.reshape(1, -1)).ravel(), 'b-', line_width=1.)
 				gca().width = 1
 				gca().height = 1
-				axis([-perc, perc, -5., 2.])
+				axis([-perc, perc, -6., 2.])
 				xtick([])
 				ytick([])
 	draw()

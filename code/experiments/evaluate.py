@@ -21,7 +21,7 @@ def main(argv):
 		print 'Usage:', argv[0], '<experiment>', '[data_points]'
 		return 0
 
-	experiment = Experiment()
+	experiment = Experiment(server='10.38.138.150')
 
 	# range of data points evaluated
 	if len(argv) < 3:
