@@ -11,7 +11,7 @@ from glob import glob
 from numpy import *
 from pgf import *
 
-BAR_WIDTH = 0.7
+BAR_WIDTH = 0.5
 
 gaussian = {
 	'label': '1x', 
@@ -96,7 +96,10 @@ def main(argv):
 			color=model['color'], 
 			fill=model['fill'],
 			bar_width=BAR_WIDTH,
-			pgf_options=['forget plot', 'nodes near coords'])
+			pgf_options=[
+				'forget plot',
+				'nodes near coords', 
+				'every node near coord/.style={yshift=0.05cm,font=\\footnotesize}'])
 
 	bar(4, 0.9,
 		labels='?',
@@ -129,7 +132,10 @@ def main(argv):
 		fill=gsm['fill'],
 		bar_width=BAR_WIDTH,
 		pattern=gsm['pattern'],
-		pgf_options=['forget plot', 'nodes near coords'])
+		pgf_options=[
+			'forget plot',
+			'nodes near coords',
+			'every node near coord/.style={yshift=0.05cm, font=\\footnotesize}'])
 	
 
 
@@ -143,27 +149,41 @@ def main(argv):
 		color=gaussian['color'],
 		fill=gaussian['fill'],
 		bar_width=BAR_WIDTH,
-		pgf_options=['nodes near coords'])
+		pgf_options=['nodes near coords', 'every node near coord/.style={yshift=0.05cm, font=\\footnotesize}'])
 
 	xtick(range(len(linear_models) + 4), 
 		[gaussian['label']] + \
 		[model['label'] for model in linear_models] + ['4x'] + \
 		[poe['label']] + \
 		[gsm['label']])
-	xlabel('Overcompleteness')
-	ylabel('Log-likelihood $\pm$ SEM [bit/pixel]')
-	axis(width=8, height=6, ytick_align='outside', pgf_options=['xtick style={color=white}'])
+	ytick([0.9, 1.1, 1.3, 1.5])
+	xlabel(r'\small Overcompleteness')
+	ylabel(r'\small Log-likelihood $\pm$ SEM [bit/pixel]')
+	axis(
+		width=5,
+		height=4,
+		ytick_align='outside',
+		pgf_options=['xtick style={color=white}', r'tick label style={font=\footnotesize}'])
+			
+	
 	axis([-0.5, 6.5, 0.85, 1.55])
-	title('8 $\\times$ 8 image patches')
+	title(r'\small 8 $\times$ 8 image patches')
+
+
 
 	subplot(0, 1)
 
 	xtick([0, 1, 2, 3, 4], ['1x', '1x', '2x', '2x', '1x'])
-	xlabel('Overcompleteness')
-	ylabel('Log-likelihood $\pm$ SEM [bit/pixel]')
-	axis(width=5.7, height=6, ytick_align='outside', pgf_options=['xtick style={color=white}'])
+	ytick([0.9, 1.1, 1.3, 1.5])
+	xlabel(r'\small Overcompleteness')
+	ylabel(r'\small Log-likelihood $\pm$ SEM [bit/pixel]')
+	axis(
+		width=3.6,
+		height=4,
+		ytick_align='outside',
+		pgf_options=['xtick style={color=white}', r'tick label style={font=\footnotesize}'])
 	axis([-0.5, 4.5, 0.85, 1.55])
-	title('16 $\\times$ 16 image patches')
+	title(r'\small 16 $\times$ 16 image patches')
 
 	# dummy plots
 	bar(-1, 0, color=gaussian['color'], fill=gaussian['fill'], bar_width=BAR_WIDTH)
@@ -175,7 +195,7 @@ def main(argv):
 	legend('Gaussian', 'ICA', 'OICA', 'PoE', 'GSM', location='outer north east')
 
 	gcf().margin = 4
-	gcf().save('/Users/lucas/Desktop/comparison.tex')
+	gcf().save('results/vanhateren/comparison.tex')
 	draw()
 
 	return 0
