@@ -126,7 +126,6 @@ def main(argv):
 		axis_on_top=False,
 		clip=False,
 		pgf_options=['xlabel style={yshift=-0.47cm}', 'clip=false'])
-	xlabel('GSM marginals, 4x overcomplete')
 
 	savefig('results/vanhateren/overcompleteness.tex')
 	draw()
