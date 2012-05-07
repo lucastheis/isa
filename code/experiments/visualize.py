@@ -55,6 +55,8 @@ def main(argv):
 	figure()
 	plot(sort(norms)[::-1])
 	title('Basis vector norms')
+	gca().ymin = 0
+	gca().ymax = 1
 	draw()
 
 

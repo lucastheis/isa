@@ -143,9 +143,10 @@ class ISA(Distribution):
 				samples = t.rvs(2., size=[1, 50000]) * samples
 
 			elif method.lower() == 'exponpow':
+				exponent = 0.5
 				samples = randn(self.subspaces[0].dim, 200000)
 				samples = samples / sqrt(sum(square(samples), 0))
-				samples = gamma(2., 1., (1, 200000))**2. * samples
+				samples = gamma(1. / exponent, 1., (1, 200000))**(1. / exponent) * samples
 
 			else:
 				samples = randn(self.subspaces[0].dim, 100000)
