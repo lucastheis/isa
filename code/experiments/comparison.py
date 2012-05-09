@@ -54,6 +54,12 @@ linear_models = [
 		'color': RGB(0., 0.0, 0.0),
 		'fill': RGB(0., 0.5, 0.8),
 	},
+	{
+		'label': '4x',
+		'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
+		'color': RGB(0., 0.0, 0.0),
+		'fill': RGB(0., 0.5, 0.8),
+	},
 ]
 
 def main(argv):
