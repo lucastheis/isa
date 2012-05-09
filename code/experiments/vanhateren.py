@@ -39,7 +39,7 @@ parameters = [
 	['8x8',   2, 100, 100, True, True],
 	['8x8',   3, 100, 100, True, True],
 	['8x8',   4, 100, 100, True, True],
-	['16x16', 2, 100, 100, True, True],
+	['16x16', 2,  50, 100, True, True],
 ]
 
 def main(argv):
@@ -114,7 +114,7 @@ def main(argv):
 		Saves intermediate results every few iterations.
 		"""
 
-		if not iteration % 10:
+		if not iteration % 5:
 			# whitened filters
 			A = dot(dct.A[1:].T, isa.A)
 
@@ -148,15 +148,28 @@ def main(argv):
 
 	if sparse_coding:
 		# initialize with sparse coding
-		model.train(data, 1,
-			method=('of', {
-				'max_iter': max_iter,
-				'noise_var': 0.1,
-				'var_goal': 1.,
-				'beta': 10.,
-				'step_width': 0.01,
-				'sigma': 0.5}),
-			callback=lambda isa, iteration: callback(0, isa, iteration))
+		if patch_size == '16x16':
+			model.train(data, 1,
+				method=('of', {
+					'max_iter': max_iter,
+					'noise_var': 0.05,
+					'var_goal': 1.,
+					'beta': 10.,
+					'step_width': 0.01,
+					'sigma': 0.3,
+					}),
+				callback=lambda isa, iteration: callback(0, isa, iteration))
+		else:
+			model.train(data, 1,
+				method=('of', {
+					'max_iter': max_iter,
+					'noise_var': 0.1,
+					'var_goal': 1.,
+					'beta': 10.,
+					'step_width': 0.01,
+					'sigma': 0.5,
+					}),
+				callback=lambda isa, iteration: callback(0, isa, iteration))
 		isa.orthogonalize()
 
 	else:
