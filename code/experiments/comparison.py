@@ -10,18 +10,19 @@ from tools import Experiment, logmeanexp
 from glob import glob
 from numpy import *
 from pgf import *
+from pgf.axes import Axes
 
 BAR_WIDTH = 0.5
 
 gaussian = {
-	'label': '1x', 
+	'label': '', 
 	'path': 'results/vanhateren/gsm.0.20042012.112721.xpck',
 	'color': RGB(0., 0., 0.),
 	'fill': RGB(1., 1., 1.),
 }
 
 gsm = {
-	'label': '1x', 
+	'label': '', 
 	'path': 'results/vanhateren/gsm.6.20042012.113532.xpck',
 	'color': RGB(0., 0., 0.),
 	'fill': RGB(1., 1., 1.),
@@ -54,15 +55,54 @@ linear_models = [
 		'color': RGB(0., 0.0, 0.0),
 		'fill': RGB(0., 0.5, 0.8),
 	},
-	{
-		'label': '4x',
-		'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
-		'color': RGB(0., 0.0, 0.0),
-		'fill': RGB(0., 0.5, 0.8),
-	},
+#	{
+#		'label': '4x',
+#		'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
+#		'color': RGB(0., 0.0, 0.0),
+#		'fill': RGB(0., 0.5, 0.8),
+#	},
+]
+
+gaussian16 = {
+	'label': '1x', 
+	'path': 'results/vanhateren/gsm.1.24052012.184339.xpck',
+	'color': RGB(0., 0., 0.),
+	'fill': RGB(1., 1., 1.),
+}
+
+gsm16 = {
+	'label': '1x', 
+	'path': 'results/vanhateren/gsm.7.24052012.184817.xpck',
+	'color': RGB(0., 0., 0.),
+	'fill': RGB(1., 1., 1.),
+	'pattern': 'crosshatch dots',
+}
+
+poe16 = {
+	'label': '4x',
+	'path': 'results/vanhateren/poe.xpck',
+	'color': RGB(0., 0., 0.),
+	'fill': RGB(0.8, 0.9, 0.0),
+}
+
+linear_models16 = [
+#	{
+#		'label': '1x', 
+#		'path': 'results/vanhateren/vanhateren.0.13042012.024853.xpck',
+#		'color': RGB(0., 0., 0.),
+#		'fill': RGB(0., 0., 0.),
+#	},
+#	{
+#		'label': '2x', 
+#		'path': 'results/vanhateren/vanhateren.7.08042012.150147.xpck',
+#		'color': RGB(0., 0.0, 0.0),
+#		'fill': RGB(0., 0.5, 0.8),
+#	},
 ]
 
 def main(argv):
+	### 8x8 PATCHES
+
 	subplot(0, 0)
 
 	# LINEAR MODELS
@@ -157,6 +197,8 @@ def main(argv):
 		bar_width=BAR_WIDTH,
 		pgf_options=['nodes near coords', 'every node near coord/.style={yshift=0.05cm, font=\\footnotesize}'])
 
+
+
 	xtick(range(len(linear_models) + 4), 
 		[gaussian['label']] + \
 		[model['label'] for model in linear_models] + ['4x'] + \
@@ -177,9 +219,76 @@ def main(argv):
 
 
 
+	### 16x16 PATCHES
+
 	subplot(0, 1)
 
-	xtick([0, 1, 2, 3, 4], ['1x', '1x', '2x', '2x', '1x'])
+	# dummy plots
+	bar(-1, 0, color=gaussian['color'], fill=gaussian['fill'], bar_width=BAR_WIDTH)
+	bar(-1, 0, color=linear_models[0]['color'], fill=linear_models[0]['fill'])
+
+	# LINEAR MODELS
+
+	bar(1, 0.9,
+		labels='?',
+		color=linear_models[0]['color'],
+		fill=linear_models[0]['fill'],
+		bar_width=BAR_WIDTH,
+		pgf_options=['forget plot'])
+
+	bar(2, 0.9,
+		labels='?',
+		color=linear_models[1]['color'],
+		fill=linear_models[1]['fill'],
+		bar_width=BAR_WIDTH,
+		pgf_options=['forget plot'])
+
+
+
+	# PRODUCT OF EXPERTS
+
+	bar(3, 0.9,
+		labels='?',
+		color=poe['color'],
+		fill=poe['fill'],
+		bar_width=BAR_WIDTH,
+		pgf_options=['forget plot'])
+
+
+
+	# GAUSSIAN SCALE MIXTURE
+
+	results = Experiment(gsm16['path'])
+	gsm['loglik_mean'] = mean(results['logliks'][:, indices])
+	gsm['loglik_sem'] = std(results['logliks'][:, indices], ddof=1) / sqrt(len(indices))
+
+	bar(4, gsm['loglik_mean'], yerr=gsm['loglik_sem'],
+		color=gsm['color'],
+		fill=gsm['fill'],
+		bar_width=BAR_WIDTH,
+		pattern=gsm['pattern'],
+		pgf_options=[
+			'forget plot',
+			'nodes near coords',
+			'every node near coord/.style={yshift=0.05cm, font=\\footnotesize}'])
+
+
+
+	# GAUSSIAN
+
+	results = Experiment(gaussian16['path'])
+	gaussian['loglik_mean'] = mean(results['logliks'][:, indices])
+	gaussian['loglik_sem'] = std(results['logliks'][:, indices], ddof=1) / sqrt(len(indices))
+
+	bar(0, gaussian['loglik_mean'], yerr=gaussian['loglik_sem'],
+		color=gaussian['color'],
+		fill=gaussian['fill'],
+		bar_width=BAR_WIDTH,
+		pgf_options=['forget plot', 'nodes near coords', 'every node near coord/.style={yshift=0.05cm, font=\\footnotesize}'])
+
+
+
+	xtick([0, 1, 2, 3, 4], ['', '1x', '2x', '2x', ''])
 	ytick([0.9, 1.1, 1.3, 1.5])
 	xlabel(r'\small Overcompleteness')
 	ylabel(r'\small Log-likelihood $\pm$ SEM [bit/pixel]')
@@ -191,17 +300,16 @@ def main(argv):
 	axis([-0.5, 4.5, 0.85, 1.55])
 	title(r'\small 16 $\times$ 16 image patches')
 
+	gcf().margin = 4
+	gcf().save('results/vanhateren/comparison.tex')
+
 	# dummy plots
-	bar(-1, 0, color=gaussian['color'], fill=gaussian['fill'], bar_width=BAR_WIDTH)
-	bar(-1, 0, color=linear_models[0]['color'], fill=linear_models[0]['fill'])
 	bar(-1, 0, color=linear_models[1]['color'], fill=linear_models[1]['fill'])
 	bar(-1, 0, color=poe['color'], fill=poe['fill'])
 	bar(-1, 0, color=gsm['color'], fill=gsm['fill'], pattern=gsm['pattern'])
 
-	legend('Gaussian', 'ICA', 'OICA', 'PoE', 'GSM', location='outer north east')
+	legend('Gaussian', 'LM', 'OLM', 'PoT', 'GSM', location='outer north east')
 
-	gcf().margin = 4
-	gcf().save('results/vanhateren/comparison.tex')
 	draw()
 
 	return 0
