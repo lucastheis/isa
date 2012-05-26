@@ -28,7 +28,8 @@ models = [
 		'color': RGB(0., 0.5, 0.8),
 	},
 	{
-		'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
+#		'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
+		'path': 'results/vanhateren.9/results.1.10.2.xpck',
 		'legend': 'GSM, 4x',
 		'color': RGB(0., 0.2, 0.5),
 	},
@@ -37,6 +38,7 @@ models = [
 # model used for visualizing basis
 model = {
 	'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
+#	'path': 'results/vanhateren.9/results.1.10.2.xpck',
 }
 
 # resolution of basis image

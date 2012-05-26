@@ -11,17 +11,17 @@ from numpy import load, mean, log, min, max, std, sqrt
 from models import Distribution 
 
 Distribution.VERBOSITY = 0
-mapp.max_processes = 10
+mapp.max_processes = 2#10
 
-NUM_AIS_SAMPLES = 200
-NUM_AIS_STEPS = 200
+NUM_AIS_SAMPLES = 100
+NUM_AIS_STEPS = 100
 
 def main(argv):
 	if len(argv) < 2:
 		print 'Usage:', argv[0], '<experiment>', '[data_points]'
 		return 0
 
-	experiment = Experiment(server='10.38.138.150')
+	experiment = Experiment()
 
 	# range of data points evaluated
 	if len(argv) < 3:
@@ -50,8 +50,6 @@ def main(argv):
 	# average log-likelihood
 	loglik = mean(logmeanexp(ais_weights, 0))
 	sem = std(logmeanexp(ais_weights, 0), ddof=1) / sqrt(ais_weights.shape[1])
-
-	print 'log-likelihood: {0:.4f} +- {1:.4f} [bit/pixel]'.format(loglik, sem)
 
 	# store save results
 	experiment['indices'] = indices

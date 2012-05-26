@@ -24,7 +24,7 @@ Distribution.VERBOSITY = 2
 parameters = [
 	# complete models
 	['8x8',   1,  20, 10, True, False],
-	['16x16', 1,  20, 10, True, False],
+	['16x16', 1,  30, 15, True, False],
 
 	# overcomplete models
 	['8x8',   2, 1000, 100, True, False],
@@ -39,6 +39,8 @@ parameters = [
 	['8x8',   2, 100, 100, True, True],
 	['8x8',   3, 100, 100, True, True],
 	['8x8',   4, 100, 200, True, True],
+	['16x16', 2,  50, 100, True, True],
+	['16x16', 2,  50, 100, True, True],
 	['16x16', 2,  50, 100, True, True],
 ]
 
@@ -133,7 +135,11 @@ def main(argv):
 		# initialize model with trained model
 		results = Experiment(argv[2])
 		model = results['model']
+
 		isa = model.model[1].model
+		dct = model.transforms[0]
+
+		experiment['model'] = model
 
 	else:
 		# enable regularization of marginals

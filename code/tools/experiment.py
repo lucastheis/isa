@@ -91,6 +91,7 @@ class Experiment:
 		# date and duration of experiment
 		strl.append(strftime('date \t\t %a, %d %b %Y %H:%M:%S', localtime(self.time)))
 		strl.append('duration \t ' + str(int(self.duration)) + 's')
+		strl.append('hostname \t ' + self.hostname)
 
 		# commit hash
 		if self.commit:
@@ -355,7 +356,7 @@ class Experiment:
 				if StrictVersion(res['version']) >= '0.3.1' else None
 			self.script = res['script'] \
 				if StrictVersion(res['version']) >= '0.4.0' else None
-			self.script = res['script_path'] \
+			self.script_path = res['script_path'] \
 				if StrictVersion(res['version']) >= '0.4.0' else None
 			self.cwd = res['cwd'] \
 				if StrictVersion(res['version']) >= '0.4.0' else None

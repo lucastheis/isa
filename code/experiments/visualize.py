@@ -13,10 +13,10 @@ from numpy import min, max
 from numpy.random import randn
 from scipy.stats import laplace
 
-RES = 8
+RES = 1
 PERC = 99.5
 
-NUM_COLS = 16
+NUM_COLS = 32
 
 def main(argv):
 	experiment = Experiment(argv[1])
@@ -34,7 +34,7 @@ def main(argv):
 	# sort by norm
 	norms = sqrt(sum(square(A), 0))
 	indices = argsort(norms)[::-1]
-	A = A[:, indices]
+#	A = A[:, indices]
 
 	# adjust intensity range
 	a = percentile(abs(A).ravel(), PERC)

@@ -33,7 +33,7 @@ poe = {
 	'label': '4x',
 	'path': 'results/vanhateren/poe.xpck',
 	'color': RGB(0., 0., 0.),
-	'fill': RGB(0.8, 0.9, 0.0),
+	'fill': RGB(0.8, 0.0, 0.0),
 }
 
 linear_models = [
@@ -55,12 +55,13 @@ linear_models = [
 		'color': RGB(0., 0.0, 0.0),
 		'fill': RGB(0., 0.5, 0.8),
 	},
-#	{
-#		'label': '4x',
+	{
+		'label': '4x',
 #		'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
-#		'color': RGB(0., 0.0, 0.0),
-#		'fill': RGB(0., 0.5, 0.8),
-#	},
+		'path': 'results/vanhateren.9/results.1.40.xpck',
+		'color': RGB(0., 0.0, 0.0),
+		'fill': RGB(0., 0.5, 0.8),
+	},
 ]
 
 gaussian16 = {
@@ -82,16 +83,16 @@ poe16 = {
 	'label': '4x',
 	'path': 'results/vanhateren/poe.xpck',
 	'color': RGB(0., 0., 0.),
-	'fill': RGB(0.8, 0.9, 0.0),
+	'fill': RGB(0.8, 0.0, 0.0),
 }
 
 linear_models16 = [
-#	{
-#		'label': '1x', 
-#		'path': 'results/vanhateren/vanhateren.0.13042012.024853.xpck',
-#		'color': RGB(0., 0., 0.),
-#		'fill': RGB(0., 0., 0.),
-#	},
+	{
+		'label': '1x', 
+		'path': 'results/vanhateren/vanhateren.1.25052012.183856.xpck',
+		'color': RGB(0., 0., 0.),
+		'fill': RGB(0., 0., 0.),
+	},
 #	{
 #		'label': '2x', 
 #		'path': 'results/vanhateren/vanhateren.7.08042012.150147.xpck',
@@ -107,7 +108,7 @@ def main(argv):
 
 	# LINEAR MODELS
 
-	# load importance weights for each models model
+	# load importance weights for each model
 	for model in linear_models:
 		model['indices'] = []
 		model['ais_weights'] = []
@@ -116,12 +117,12 @@ def main(argv):
 			results = Experiment(path)
 
 			model['indices'].append(results['indices'])
-			model['ais_weights'].append(results['ais_weights'])
+			model['ais_weights'].append(logmeanexp(results['ais_weights'], 0).flatten())
 
 		# make sure each data point is used only once
 		model['indices'] = hstack(model['indices']).tolist()
 		model['indices'], idx = unique(model['indices'], return_index=True)
-		model['ais_weights'] = hstack(model['ais_weights'])[:, idx]
+		model['ais_weights'] = hstack(model['ais_weights'])[idx]
 
 	# find intersection of data points
 	indices = [model['indices'] for model in linear_models]
@@ -134,8 +135,8 @@ def main(argv):
 		# exp(ais_weights) represent unbiased estimates of the likelihood
 		estimates = model['ais_weights'][:, asarray(subset)]
 
-		model['loglik_mean'] = mean(logmeanexp(estimates, 0))
-		model['loglik_sem'] = std(logmeanexp(estimates, 0), ddof=1) / sqrt(model['ais_weights'].shape[1])
+		model['loglik_mean'] = mean(estimates)
+		model['loglik_sem'] = std(estimates, ddof=1) / sqrt(model['ais_weights'].size)
 
 		bar(idx + 1, model['loglik_mean'], 
 			yerr=model['loglik_sem'],
@@ -147,12 +148,12 @@ def main(argv):
 				'nodes near coords', 
 				'every node near coord/.style={yshift=0.05cm,font=\\footnotesize}'])
 
-	bar(4, 0.9,
-		labels='?',
-		color=linear_models[1]['color'],
-		fill=linear_models[1]['fill'],
-		bar_width=BAR_WIDTH,
-		pgf_options=['forget plot'])
+#	bar(4, 0.9,
+#		labels='?',
+#		color=linear_models[1]['color'],
+#		fill=linear_models[1]['fill'],
+#		bar_width=BAR_WIDTH,
+#		pgf_options=['forget plot'])
 
 
 
@@ -211,7 +212,12 @@ def main(argv):
 		width=5,
 		height=4,
 		ytick_align='outside',
-		pgf_options=['xtick style={color=white}', r'tick label style={font=\footnotesize}'])
+		axis_x_line='bottom',
+		axis_y_line='left',
+		pgf_options=[
+			'xtick style={color=white}',
+			r'tick label style={font=\footnotesize}',
+			'every outer x axis line/.append style={-}'])
 			
 	
 	axis([-0.5, 6.5, 0.85, 1.55])
@@ -227,14 +233,56 @@ def main(argv):
 	bar(-1, 0, color=gaussian['color'], fill=gaussian['fill'], bar_width=BAR_WIDTH)
 	bar(-1, 0, color=linear_models[0]['color'], fill=linear_models[0]['fill'])
 
+
+
 	# LINEAR MODELS
 
-	bar(1, 0.9,
-		labels='?',
-		color=linear_models[0]['color'],
-		fill=linear_models[0]['fill'],
-		bar_width=BAR_WIDTH,
-		pgf_options=['forget plot'])
+	# load importance weights for each model
+	for model in linear_models16:
+		model['indices'] = []
+		model['ais_weights'] = []
+
+		for path in glob(model['path'][:-4] + '[0-9]*[0-9].xpck'):
+			results = Experiment(path)
+
+			model['indices'].append(results['indices'])
+			model['ais_weights'].append(logmeanexp(results['ais_weights'], 0).flatten())
+
+		# make sure each data point is used only once
+		model['indices'] = hstack(model['indices']).tolist()
+		model['indices'], idx = unique(model['indices'], return_index=True)
+		model['ais_weights'] = hstack(model['ais_weights'])[idx]
+
+	# find intersection of data points
+	indices = [model['indices'] for model in linear_models]
+	indices = list(set(indices[0]).intersection(*indices[1:]))
+
+	# use importance weights to estimate log-likelihood
+	for idx, model in enumerate(linear_models16):
+		subset = [i in indices for i in model['indices']]
+
+		# exp(ais_weights) represent unbiased estimates of the likelihood
+		estimates = model['ais_weights'][:, asarray(subset)]
+
+		model['loglik_mean'] = mean(estimates)
+		model['loglik_sem'] = std(estimates, ddof=1) / sqrt(model['ais_weights'].size)
+
+		bar(idx + 1, model['loglik_mean'], 
+			yerr=model['loglik_sem'],
+			color=model['color'], 
+			fill=model['fill'],
+			bar_width=BAR_WIDTH,
+			pgf_options=[
+				'forget plot',
+				'nodes near coords', 
+				'every node near coord/.style={yshift=0.05cm,font=\\footnotesize}'])
+
+#	bar(1, 0.9,
+#		labels='?',
+#		color=linear_models[0]['color'],
+#		fill=linear_models[0]['fill'],
+#		bar_width=BAR_WIDTH,
+#		pgf_options=['forget plot'])
 
 	bar(2, 0.9,
 		labels='?',
@@ -249,8 +297,8 @@ def main(argv):
 
 	bar(3, 0.9,
 		labels='?',
-		color=poe['color'],
-		fill=poe['fill'],
+		color=poe16['color'],
+		fill=poe16['fill'],
 		bar_width=BAR_WIDTH,
 		pgf_options=['forget plot'])
 
@@ -263,8 +311,8 @@ def main(argv):
 	gsm['loglik_sem'] = std(results['logliks'][:, indices], ddof=1) / sqrt(len(indices))
 
 	bar(4, gsm['loglik_mean'], yerr=gsm['loglik_sem'],
-		color=gsm['color'],
-		fill=gsm['fill'],
+		color=gsm16['color'],
+		fill=gsm16['fill'],
 		bar_width=BAR_WIDTH,
 		pattern=gsm['pattern'],
 		pgf_options=[
@@ -296,7 +344,12 @@ def main(argv):
 		width=3.6,
 		height=4,
 		ytick_align='outside',
-		pgf_options=['xtick style={color=white}', r'tick label style={font=\footnotesize}'])
+		axis_x_line='bottom',
+		axis_y_line='left',
+		pgf_options=[
+			'xtick style={color=white}',
+			r'tick label style={font=\footnotesize}',
+			'every outer x axis line/.append style={-}'])
 	axis([-0.5, 4.5, 0.85, 1.55])
 	title(r'\small 16 $\times$ 16 image patches')
 

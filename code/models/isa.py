@@ -635,6 +635,7 @@ class ISA(Distribution):
 		pocket = kwargs.get('pocket', shuffle)
 		train_noise = kwargs.get('train_noise', True)
 		weight_decay = kwargs.get('weight_decay', 0.)
+		natural_gradient = kwargs.get('natural_gradient', True)
 
 		if self.noise:
 			# reconstruct data points
@@ -722,16 +723,27 @@ class ISA(Distribution):
 					batch = X[:, i:i + batch_size]
 
 					if not batch.shape[1] < batch_size:
-						# calculate gradient
-						P = momentum * P + A.T - \
-							dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size
+						if natural_gradient:
+							# calculate gradient
+							P = momentum * P + W - \
+								dot(dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size, dot(W.T, W))
 
-						if weight_decay > 0.:
-							P -= weight_decay * dot(A.T, dot(A, A.T))
+							# update parameters
+							W += step_width * P
+						else:
+							# calculate gradient
+							P = momentum * P + A.T - \
+								dot(self.prior_energy_gradient(dot(W, batch)), batch.T) / batch_size
 
-						# update parameters
-						W += step_width * P
-						A = inv(W)
+							if weight_decay > 0.:
+								P -= weight_decay * dot(A.T, dot(A, A.T))
+
+							# update parameters
+							W += step_width * P
+							A = inv(W)
+
+			if natural_gradient:
+				A = inv(W)
 
 			if pocket:
 				# test for improvement of lower bound
@@ -1158,7 +1170,7 @@ class ISA(Distribution):
 
 		# variances and incomplete covariance matrices
 		v = square(S).reshape(-1, 1, X.shape[1])
-		C = multiply(v, self.A.T.reshape(self.num_hiddens, -1, 1)).transpose([2, 0, 1])
+		C = multiply(v, self.A.T.reshape(self.num_hiddens, -1, 1)).transpose([2, 0, 1]) # TODO: FIX MEMORY ISSUES
 
 		# update hidden states
 		Y = asshmarray(Y)
