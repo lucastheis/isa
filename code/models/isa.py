@@ -1025,7 +1025,7 @@ class ISA(Distribution):
 		if not annealing_weights:
 			annealing_weights = linspace(0, 1, num_steps + 1)[1:]
 
-		# initialize proposal distribution to Gaussian
+		# initialize proposal distribution to be Gaussian
 		model = deepcopy(self)
 		for gsm in model.subspaces:
 			gsm.scales[:] = 1.
@@ -1038,13 +1038,13 @@ class ISA(Distribution):
 		B = self.nullspace_basis()
 		Q = dot(B.T, B)
 
-		# initialize proposal samples (X and Z are initially independent and Gaussian)
+		# initialize proposal samples (Z is initially Gaussian and independent of X)
 		Z = dot(B, randn(self.num_hiddens, X.shape[1]))
 		Y = WX + dot(pinv(B), Z)
 
-		# initialize importance weights
+		# initialize importance weights (log-determinant of dot(B.T, B) not needed here)
 		log_is_weights = sum(multiply(Z, dot(inv(dot(B, B.T)), Z)), 0) / 2. \
-			+ (self.num_hiddens - self.num_visibles) / 2. * log(2. * pi) + slogdet(dot(W.T, W))[1] / 2.
+			+ (self.num_hiddens - self.num_visibles) / 2. * log(2. * pi)
 		log_is_weights.resize(1, X.shape[1])
 
 		for step, beta in enumerate(annealing_weights):
@@ -1064,7 +1064,7 @@ class ISA(Distribution):
 			if Distribution.VERBOSITY > 1:
 				print '{0:6}\t{1:10.2f}'.format(step + 1, mean(self.prior_energy(Y)))
 
-		log_is_weights += self.prior_loglikelihood(Y)
+		log_is_weights += self.prior_loglikelihood(Y) + slogdet(dot(W.T, W))[1] / 2.
 
 		return Y, log_is_weights
 
