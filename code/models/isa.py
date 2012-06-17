@@ -219,7 +219,7 @@ class ISA(Distribution):
 		"""
 
 		max_iter = kwargs.get('max_iter', 100)
-		adaptive = kwargs.get('adaptive', True) 
+		adaptive = kwargs.get('adaptive', True)
 		train_prior = kwargs.get('train_prior', True)
 		train_subspaces = kwargs.get('train_subspaces', False)
 		train_basis = kwargs.get('train_basis', True)
@@ -746,6 +746,7 @@ class ISA(Distribution):
 			# update linear features
 			self.A = A[:self.A.shape[0]]
 
+		# TODO: will cause problems if adaptive = True and pocket = False
 		return True
 
 
