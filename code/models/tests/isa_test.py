@@ -4,7 +4,7 @@ import unittest
 sys.path.append('./code')
 
 from models import ISA, Distribution
-from numpy import zeros, all, abs
+from numpy import zeros, all, abs, eye, sqrt
 
 Distribution.VERBOSITY = 0
 
@@ -76,6 +76,31 @@ class Tests(unittest.TestCase):
 		Y = isa.sample_posterior(X)
 
 		self.assertTrue(all(isa.prior_energy(M) <= isa.prior_energy(Y)))
+
+
+
+	def test_evaluate(self):
+		isa1 = ISA(2)
+		isa1.A = eye(2)
+
+		for gsm in isa1.subspaces:
+			gsm.scales[:] = 1.
+
+		# equivalent overcomplete model
+		isa2 = ISA(2, 4)
+		isa2.A[:, :2] = isa1.A / sqrt(2.)
+		isa2.A[:, 2:] = isa1.A / sqrt(2.)
+
+		for gsm in isa2.subspaces:
+			gsm.scales[:] = 1.
+
+		data = isa1.sample(100)
+
+		# the results should not depend on the parameters
+		ll1 = isa1.evaluate(data)
+		ll2 = isa2.evaluate(data, num_samples=2, sampling_method=('ais', {'num_steps': 2}))
+
+		self.assertTrue(abs(ll1 - ll2) < 1e-5)
 
 
 

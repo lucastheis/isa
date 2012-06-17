@@ -13,8 +13,10 @@ from numpy import min, max
 from numpy.random import randn
 from scipy.stats import laplace
 
-RES = 8
+RES = 1
 PERC = 99.5
+
+NUM_COLS = 32
 
 def main(argv):
 	experiment = Experiment(argv[1])
@@ -32,7 +34,7 @@ def main(argv):
 	# sort by norm
 	norms = sqrt(sum(square(A), 0))
 	indices = argsort(norms)[::-1]
-	A = A[:, indices]
+#	A = A[:, indices]
 
 	# adjust intensity range
 	a = percentile(abs(A).ravel(), PERC)
@@ -43,21 +45,12 @@ def main(argv):
 
 	# stitch together into a single image
 	patch_size = int(sqrt(A.shape[0]) + 0.5)
-	patches = stitch(A.T.reshape(-1, patch_size, patch_size))
+	patches = stitch(A.T.reshape(-1, patch_size, patch_size), num_cols=NUM_COLS)
 	patches = repeat(repeat(patches, RES, 0), RES, 1)
 
-	# visualize patches
-	figure()
 	imshow(patches, dpi=75 * RES)
-	title('Basis (white)')
 	axis('off')
-	draw()
 
-	figure()
-	plot(sort(norms)[::-1])
-	gca().ymin = 0
-	gca().ymax = 1
-	title('Basis vector norms')
 	draw()
 
 
@@ -92,23 +85,24 @@ def main(argv):
 		samples.append(gsm.sample(1000))
 
 	perc = percentile(hstack(samples), 99.5)
-	xvals = linspace(-perc, perc, 200)
+	xvals = linspace(-perc, perc, 100)
 
-	for i in range(8):
-		for j in range(16):
+	for i in range(0, 8):
+		for j in range(0, 16):
 			try:
-				gsm = isa.subspaces[indices[i * (isa.num_hiddens + 1) / isa.num_visibles + j]]
+				gsm = isa.subspaces[indices[i * NUM_COLS + j]]
 			except:
 				pass
 			else:
 				subplot(7 - i, j, spacing=0)
 				plot(xvals, laplace.logpdf(xvals, scale=sqrt(0.5)).ravel(), 'k', opacity=0.5)
 				plot(xvals, gsm.loglikelihood(xvals.reshape(1, -1)).ravel(), 'b-', line_width=1.)
-				gca().width = 1
-				gca().height = 1
+				gca().width = 0.8
+				gca().height = 0.8
 				axis([-perc, perc, -6., 2.])
 				xtick([])
 				ytick([])
+
 	draw()
 
 	return 0
