@@ -67,7 +67,7 @@ def main(argv):
 	# start experiment
 	experiment = Experiment()
 
-	# load data, log-transform and center data
+	# load log-transformed and centered data
 	data = load('data/vanhateren.{0}.preprocessed.npz'.format(patch_size))
 
 	data_train = data['data_train'][:, :num_data]

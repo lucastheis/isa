@@ -996,7 +996,7 @@ class ISA(Distribution):
 		# initial hidden state
 		if Z is None:
 			Y = WX + dot(Q, Y) if Y is not None else \
-				WX + dot(Q, self.sample_prior(X.shape[1])) # TODO: replace with mean-field approximation
+				WX + dot(Q, self.sample_prior(X.shape[1]))
 		else:
 			V = pinv(self.nullspace_basis())
 			Y = WX + dot(V, Z)

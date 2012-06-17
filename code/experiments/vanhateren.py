@@ -42,6 +42,8 @@ parameters = [
 	['16x16', 2,  50, 100, True, True],
 	['16x16', 2,  50, 100, True, True],
 	['16x16', 2,  50, 100, True, True],
+
+	['8x8',   1,  20, 10, True, False],
 ]
 
 def main(argv):
@@ -95,7 +97,7 @@ def main(argv):
 	### MODEL DEFINITION
 
 	isa = ISA(num_visibles=data.shape[0] - 1,
-	          num_hiddens=data.shape[0] * overcompleteness - 1)
+	          num_hiddens=data.shape[0] * overcompleteness - 1, ssize=1)
 
 	# model DC component with a mixture of Gaussians
 	model = StackedModel(dct,
@@ -157,7 +159,6 @@ def main(argv):
 
 		experiment.progress(10)
 
-
 		if sparse_coding:
 			# initialize with sparse coding
 			if patch_size == '16x16':
@@ -213,8 +214,9 @@ def main(argv):
 	model.train(data, 1,
 		max_iter=max_iter_ft,
 		train_prior=train_prior,
+		train_subspaces=False,
 		persistent=True,
-		init_sampling_steps=10 if sparse_coding or not train_prior else 50,
+		init_sampling_steps=10 if not len(argv) > 2 and (sparse_coding or not train_prior) else 50,
 		method=('lbfgs', {'max_fun': 50}),
 		callback=lambda isa, iteration: callback(1, isa, iteration),
 		sampling_method=('gibbs', {'num_steps': 2}))

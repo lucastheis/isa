@@ -22,8 +22,8 @@ mapp.max_processes = 1
 NUM_SAMPLES = 1000000
 NUM_BINS = 800
 MCMC_STEPS = 10
-Z_FROM = -20.
-Z_TO = 30.
+Z_FROM = -25.#-20.
+Z_TO = 25.#30.
 
 # size and resolution for image of prior
 IMG_SIZE = 1024
@@ -48,7 +48,7 @@ def main(argv):
 	# nullspace
 	W = pinv(ica.A)
 	V = pinv(ica.nullspace_basis())
-	x = 18.
+	x = -8.#18.
 	s_fr = (W * x + V * Z_FROM).flatten()
 	s_to = (W * x + V * Z_TO).flatten()
 

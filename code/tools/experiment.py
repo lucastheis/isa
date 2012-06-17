@@ -7,7 +7,7 @@ Manage and display experimental results.
 __license__ = 'MIT License <http://www.opensource.org/licenses/mit-license.php>'
 __author__ = 'Lucas Theis <lucas@tuebingen.mpg.de>'
 __docformat__ = 'epytext'
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 
 import sys
 import os
@@ -266,12 +266,15 @@ class Experiment:
 
 
 
-	def save(self, filename=None):
+	def save(self, filename=None, overwrite=False):
 		"""
 		Store results. If a filename is given, the default is overwritten.
 
 		@type  filename: string
 		@param filename: path to where the experiment will be stored
+
+		@type  overwrite: boolean
+		@param overwrite: overwrite existing files
 		"""
 
 		self.duration = time() - self.time
@@ -294,12 +297,13 @@ class Experiment:
 		counter = 0
 		pieces = path.splitext(filename)
 
-		while path.exists(filename):
-			counter += 1
-			filename = pieces[0] + '.' + str(counter) + pieces[1]
+		if not overwrite:
+			while path.exists(filename):
+				counter += 1
+				filename = pieces[0] + '.' + str(counter) + pieces[1]
 
-		if counter:
-			warn(''.join(pieces) + ' already exists. Saving to ' + filename + '.')
+			if counter:
+				warn(''.join(pieces) + ' already exists. Saving to ' + filename + '.')
 
 		# store experiment
 		with open(filename, 'wb') as handle:
