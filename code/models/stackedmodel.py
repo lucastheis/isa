@@ -3,7 +3,7 @@ from numpy import zeros
 
 class StackedModel(Distribution):
 	def __init__(self, *args):
-		self.transforms = args[:-1]
+		self.transforms = list(args[:-1])
 		self.model = args[-1]
 		self.dim = self.model.dim
 
@@ -43,7 +43,7 @@ class StackedModel(Distribution):
 		loglik = zeros([1, data.shape[1]])
 
 		for transform in self.transforms:
-			loglik = transform.logjacobian(data)
+			loglik += transform.logjacobian(data)
 			data = transform(data)
 
 		loglik = loglik + self.model.loglikelihood(data, **kwargs)
