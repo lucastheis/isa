@@ -19,13 +19,14 @@ mapp.max_processes = 8
 
 # PS, SS, ND, MI, NS, ML, LS, RG
 parameters = [
-	['8x8',   1, 100,  40, 32, 50, False, False],
-	['16x16', 1, 100, 200, 32, 50, False, False],
-	['8x8',   2, 100,  40, 32, 50, False, False],
-	['16x16', 2, 100,  80, 32, 50, False, False],
-	['8x8',   1, 100,  40, 32, 50, True,  False],
-	['16x16', 1, 100,  40, 32, 50, True,  False],
-	['8x8',   1, 100,  40, 32, 50, False, True],
+	['8x8',   1, 100,  40,   32, 50, False, False],
+	['16x16', 1, 100, 200,   32, 50, False, False],
+	['8x8',   2, 100,  40,   32, 50, False, False],
+	['16x16', 2, 100,  80,   32, 50, False, False],
+	['8x8',   1, 100,  40,   32, 50, True,  False],
+	['16x16', 1, 100,  40,   32, 50, True,  False],
+	['8x8',   1, 100,  40,   32, 50, False, True],
+	['8x8',   1, 100,  40, None, 50, False, False],
 ]
 
 def main(argv):
@@ -67,12 +68,19 @@ def main(argv):
 	# start experiment
 	experiment = Experiment()
 
-	# load log-transformed and centered data
-	data = load('data/vanhateren.{0}.preprocessed.npz'.format(patch_size))
+#	# load log-transformed and centered data
+#	data = load('data/vanhateren.{0}.preprocessed.npz'.format(patch_size))
+#
+#	data_train = data['data_train'][:, :num_data]
+#	data_test = data['data_test']
 
-	data_train = data['data_train'][:, :num_data]
-	data_test = data['data_test']
-	
+	# load data, log-transform and center data
+	data_train = load('data/vanhateren.{0}.1.npz'.format(patch_size))['data']
+	data_train = preprocess(data_train, noise_level=noise_level)
+
+	data_test = load('data/vanhateren.{0}.0.npz'.format(patch_size))['data']
+	data_test = preprocess(data_test, noise_level=noise_level, shuffle=False)[:, :10000]
+
 	# container for hierarchical model
 	model = []
 

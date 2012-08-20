@@ -5,9 +5,9 @@ Tools for sampling and visualizing image patches.
 __license__ = 'MIT License <http://www.opensource.org/licenses/mit-license.php>'
 __author__ = 'Lucas Theis <lucas@tuebingen.mpg.de>'
 __docformat__ = 'epytext'
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
-from numpy import asarray, abs, min, max, zeros, ones, vstack, hstack
+from numpy import asarray, abs, min, max, zeros, ones, vstack, hstack, percentile
 from PIL import Image
 
 def stitch(patches, **kwargs):
@@ -106,7 +106,7 @@ def imsave(filename, img):
 
 
 
-def imformat(img, symmetric=True):
+def imformat(img, symmetric=True, perc=100):
 	"""
 	Rescales and converts images to uint8.
 
@@ -115,6 +115,9 @@ def imformat(img, symmetric=True):
 
 	@type  symmetric: boolean
 	@param symmetric: if true, 0. will be mapped to 128
+
+	@type  perc: int
+	@param perc: can be used to clip intensity values
 
 	@rtype: ndarray
 	@return: the converted image
@@ -125,11 +128,15 @@ def imformat(img, symmetric=True):
 	if 'float' in str(img.dtype) or max(img) > 255 or min(img) < 0:
 		# rescale
 		if symmetric:
-			a = float(max(abs(img)))
+			a = float(percentile(abs(img), perc))
 			img = (img + a) / (2. * a) * 255. + 0.5
 		else:
-			a, b = float(min(img)), max(img)
+			a, b = float(percentile(img, 100 - perc)), float(percentile(img, perc))
 			img = (img - a) / (b - a) * 255. + 0.5
+
+	img[img < 0] = 0
+	img[img > 255] = 255
+
 	return asarray(img, 'uint8')
 
 

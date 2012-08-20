@@ -6,7 +6,7 @@ import sys
 
 sys.path.append('./code')
 
-from tools import Experiment, logmeanexp
+from tools import Experiment, logmeanexp, preprocess
 from glob import glob
 from numpy import *
 from pgf import *
@@ -111,7 +111,19 @@ linear_models16 = [
 	},
 	{
 		'label': '2x', 
-		'path': 'results/vanhateren.10/results.1.20.xpck',
+		'path': 'results/c_vanhateren/c_vanhateren.10.22072012.124848.xpck',
+		'color': RGB(0., 0.0, 0.0),
+		'fill': RGB(0., 0.5, 0.8),
+	},
+	{
+		'label': '3x', 
+		'path': 'results/c_vanhateren/c_vanhateren.11.23072012.024217.xpck',
+		'color': RGB(0., 0.0, 0.0),
+		'fill': RGB(0., 0.5, 0.8),
+	},
+	{
+		'label': '4x', 
+		'path': 'results/c_vanhateren/c_vanhateren.12.25072012.003003.xpck',
 		'color': RGB(0., 0.0, 0.0),
 		'fill': RGB(0., 0.5, 0.8),
 	},
@@ -160,6 +172,27 @@ def main(argv):
 			model['indices'].append(results['indices'])
 			model['loglik'].append(logmeanexp(results['ais_weights'], 0).flatten() / log(2.) / 64.)
 
+		if not model['loglik']:
+			experiment = Experiment(model['path'])
+
+			# whitening and DC transform
+			wt = experiment['model'].model[1].transforms[0]
+			dct = experiment['model'].transforms[0]
+
+			# load test data
+			data = load('data/vanhateren.{0}.0.npz'.format(experiment['parameters'][0]))['data']
+			data = preprocess(data, shuffle=False)
+
+			for path in glob(model['path'][:-4] + 'ais_samples.[0-9]*[0-9].xpck'):
+				results = Experiment(path)
+
+				# incorporate log-likelihood of DC component and jacobian of whitening transform
+				loglik_dc = experiment['model'].model[0].loglikelihood(dct(data[:, results['indices']])[:1])
+				loglik = logmeanexp(results['ais_weights'], 0) + wt.logjacobian() + loglik_dc
+
+				model['indices'].append(results['indices'])
+				model['loglik'].append(loglik.flatten() / 64. / log(2.))
+
 		# make sure each data point is used only once
 		model['indices'] = hstack(model['indices']).tolist()
 		model['indices'], idx = unique(model['indices'], return_index=True)
@@ -181,14 +214,14 @@ def main(argv):
 		model['loglik_mean'] = mean(estimates)
 		model['loglik_sem'] = std(estimates, ddof=1) / sqrt(estimates.size)
 
-		bar(idx + 2, model['loglik_mean'], 
+		bar(idx + 2, model['loglik_mean'],
 			yerr=model['loglik_sem'],
-			color=model['color'], 
+			color=model['color'],
 			fill=model['fill'],
 			bar_width=BAR_WIDTH,
 			pgf_options=[
 				'forget plot',
-				'nodes near coords', 
+				'nodes near coords',
 				'every node near coord/.style={yshift=0.05cm,font=\\footnotesize}'])
 
 
@@ -205,14 +238,14 @@ def main(argv):
 		model['loglik_mean'] = mean(estimates)
 		model['loglik_sem'] = std(estimates, ddof=1) / sqrt(estimates.size)
 
-		bar(idx + 6, model['loglik_mean'], 
+		bar(idx + 6, model['loglik_mean'],
 			yerr=model['loglik_sem'],
-			color=model['color'], 
+			color=model['color'],
 			fill=model['fill'],
 			bar_width=BAR_WIDTH,
 			pgf_options=[
 				'forget plot',
-				'nodes near coords', 
+				'nodes near coords',
 				'every node near coord/.style={yshift=0.05cm,font=\\footnotesize}'])
 
 
@@ -232,7 +265,7 @@ def main(argv):
 			'forget plot',
 			'nodes near coords',
 			'every node near coord/.style={yshift=0.05cm, font=\\footnotesize}'])
-	
+
 
 
 	# GAUSSIAN
@@ -249,7 +282,7 @@ def main(argv):
 
 
 
-	xtick(range(len(linear_models) + len(poe) + 2), 
+	xtick(range(len(linear_models) + len(poe) + 2),
 		[gaussian['label']] + \
 		[gsm['label']] + \
 		[model['label'] for model in linear_models] + \
@@ -267,8 +300,7 @@ def main(argv):
 			'xtick style={color=white}',
 			r'tick label style={font=\footnotesize}',
 			'every outer x axis line/.append style={-}'])
-			
-	
+
 	axis([-0.5, 8.5, 0.85, 1.65])
 	title(r'\small 8 $\times$ 8 image patches')
 
@@ -282,8 +314,6 @@ def main(argv):
 	bar(-1, 0, color=gaussian['color'], fill=gaussian['fill'], bar_width=BAR_WIDTH)
 	bar(-1, 0, color=gsm['color'], fill=gsm['fill'], pattern=gsm['pattern'])
 
-
-
 	# LINEAR MODELS
 
 	# load importance weights for each model
@@ -295,10 +325,32 @@ def main(argv):
 			results = Experiment(path)
 
 			model['indices'].append(results['indices'])
-			print path
-			print mean(logmeanexp(results['ais_weights'], 0).flatten()) / 256. / log(2.)
-			print
 			model['loglik'].append(logmeanexp(results['ais_weights'], 0).flatten() / 256. / log(2.))
+
+		if not model['loglik']:
+			experiment = Experiment(model['path'])
+
+			# whitening and DC transform
+			wt = experiment['model'].model[1].transforms[0]
+			dct = experiment['model'].transforms[0]
+
+			# load test data
+			data = load('data/vanhateren.{0}.0.npz'.format(experiment['parameters'][0]))['data']
+			data = preprocess(data, shuffle=False)
+
+			for path in glob(model['path'][:-4] + 'ais_samples.[0-9]*[0-9].xpck'):
+				results = Experiment(path)
+
+				# incorporate log-likelihood of DC component and jacobian of whitening transform
+				loglik_dc = experiment['model'].model[0].loglikelihood(dct(data[:, results['indices']])[:1])
+				loglik = logmeanexp(results['ais_weights'], 0) + wt.logjacobian() + loglik_dc
+
+				model['indices'].append(results['indices'])
+				model['loglik'].append(loglik.flatten() / 256. / log(2.))
+
+		if not model['loglik']:
+			print 'NO IMPORTANCE WEIGHTS FOUND FOR', model['path']
+			return 0
 
 		# make sure each data point is used only once
 		model['indices'] = hstack(model['indices']).tolist()
@@ -321,14 +373,14 @@ def main(argv):
 		model['loglik_mean'] = mean(estimates)
 		model['loglik_sem'] = std(estimates, ddof=1) / sqrt(estimates.size)
 
-		bar(idx + 2, model['loglik_mean'], 
+		bar(idx + 2, model['loglik_mean'],
 			yerr=model['loglik_sem'],
-			color=model['color'], 
+			color=model['color'],
 			fill=model['fill'],
 			bar_width=BAR_WIDTH,
 			pgf_options=[
 				'forget plot',
-				'nodes near coords', 
+				'nodes near coords',
 				'every node near coord/.style={yshift=0.05cm,font=\\footnotesize}'])
 
 
@@ -345,14 +397,14 @@ def main(argv):
 		model['loglik_mean'] = mean(estimates)
 		model['loglik_sem'] = std(estimates, ddof=1) / sqrt(estimates.size)
 
-		bar(idx + 4, model['loglik_mean'], 
+		bar(idx + 6, model['loglik_mean'],
 			yerr=model['loglik_sem'],
-			color=model['color'], 
+			color=model['color'],
 			fill=model['fill'],
 			bar_width=BAR_WIDTH,
 			pgf_options=[
 				'forget plot',
-				'nodes near coords', 
+				'nodes near coords',
 				'every node near coord/.style={yshift=0.05cm,font=\\footnotesize}'])
 
 
@@ -389,11 +441,11 @@ def main(argv):
 
 
 
-	xtick([0, 1, 2, 3, 4, 5, 6], ['-', '-', '1x', '2x', '2x', '3x', '4x'])
+	xtick([0, 1, 2, 3, 4, 5, 6, 7, 8], ['-', '-', '1x', '2x', '3x', '4x', '2x', '3x', '4x'])
 	ytick([0.9, 1.1, 1.3, 1.5])
 	xlabel(r'\small Overcompleteness')
 	axis(
-		width=4.8,
+		width=6,
 		height=4,
 		ytick_align='outside',
 		axis_x_line='bottom',
@@ -402,7 +454,7 @@ def main(argv):
 			'xtick style={color=white}',
 			r'tick label style={font=\footnotesize}',
 			'every outer x axis line/.append style={-}'])
-	axis([-0.5, 6.5, 0.85, 1.65])
+	axis([-0.5, 8.5, 0.85, 1.65])
 	title(r'\small 16 $\times$ 16 image patches')
 
 	gcf().margin = 4

@@ -168,7 +168,7 @@ def main(argv):
 	if len(argv) > 2:
 		# initialize ISA model with already trained model
 		results = Experiment(argv[2])
-	
+
 		model_ = results['model'] if isinstance(results['model'], ISA) \
 			else results['model'][1].model
 
@@ -181,7 +181,7 @@ def main(argv):
 
 		# free memory
 		del model_
-		
+
 	elif sparse_coding:
 		# initialize with sparse coding
 		model.initialize(data, 1)
