@@ -30,10 +30,10 @@ def main(argv):
 				print 'Could not save intermediate results.'
 
 	patch_size = '20x20'
-	num_pca = 200
-	num_data = 200000
+	num_pca = 150
+	num_data = 1000000
 	max_iter = 200
-	overcompleteness = 2
+	overcompleteness = 3
 
 	data = load('data/vanhateren.{0}.1.1.npz'.format(patch_size))['data']
 	data = preprocess(data)

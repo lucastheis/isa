@@ -10,26 +10,26 @@ sys.path.append('./code')
 
 from isa import ISA, GSM
 from models import StackedModel, ConcatModel, MoGaussian
-from tools import Experiment, preprocess, mapp, logmeanexp
+from tools import Experiment, preprocess, mapp, logmeanexp, asshmarray
 from transforms import LinearTransform, WhiteningTransform, SubspaceGaussianization, Transform
-from numpy import seterr, asarray, sqrt, load, dot, vstack, hstack, mean, std, log, isnan, unique, ones
+from numpy import *
 from numpy.random import rand
 from numpy.linalg import slogdet
 from glob import glob
 
-mapp.max_processes = 1
+mapp.max_processes = 24
 
 Transform.VERBOSITY = 0
 
 first_layers = {
-#	'8x8': 'results/c_vanhateren/c_vanhateren.7.22062012.075120.xpck',
-	'8x8': 'results/c_vanhateren/c_vanhateren.15.28062012.131634.xpck',
+	'8x8': 'results/c_vanhateren/c_vanhateren.7.22062012.075120.xpck',
+#	'8x8': 'results/c_vanhateren/c_vanhateren.15.28062012.131634.xpck',
 	'16x16': 'results/c_vanhateren/c_vanhateren.10.22072012.124848.xpck'
 }
 
 
 def main(argv):
-#	seterr(invalid='raise', over='raise', divide='raise')
+	seterr(invalid='raise', over='raise', divide='raise')
 
 	experiment = Experiment()
 
@@ -74,13 +74,14 @@ def main(argv):
 
 
 
-	### LOAD AIS SAMPLES
+	### LOAD AND PROCESS AIS SAMPLES
 
 	loglik = []
 	ais_samples = []
 	ais_weights = []
 	indices = []
 
+	# load AIS samples
 	for path in glob(first_layers[patch_size][:-4] + 'ais_samples.*.xpck'):
 		results = Experiment(path)
 		indices = indices + results['indices']
@@ -105,9 +106,13 @@ def main(argv):
 		print '1 layer, {0} [bit/px]'.format(loglik[-1])
 		print
 
+		# remove model component from importance weights, since it will be replaced
 		for i in range(len(ais_samples)):
 			ais_weights[i, :] -= isa.prior_loglikelihood(ais_samples[i]).flatten() - slogdet(compl_basis)[1]
 
+	# map AIS samples to visible space
+	for i in range(len(ais_samples)):
+		ais_samples[i] = dot(compl_basis, ais_samples[i])
 
 
 	# these objects will be saved
@@ -118,48 +123,55 @@ def main(argv):
 
 	### MODEL TRAINING
 
+	# move into shared memory
+	ais_weights = asshmarray(ais_weights)
+
+	_logjac_dat = zeros([1, data.shape[1]])
+	_logjac_ais = zeros([1, ais_samples[0].shape[1]])
+
 	# train remaining layers
 	for layer in range(1, max_layers):
 		# Gaussianize training data
 		sg = SubspaceGaussianization(isa)
+
+		_logjac_dat += sg.logjacobian(compl_data)
+		_logjac_ais += sg.logjacobian(ais_samples[0])
+
 		compl_data = sg(compl_data)
 
-		for i in range(len(ais_samples)):
+		def parfor(i):
 			# Gaussianize AIS samples
-			ais_weights[i, :] += sg.logjacobian(dot(compl_basis, ais_samples[i])).flatten()
-			ais_samples[i] = sg(dot(compl_basis, ais_samples[i]))
+			ais_weights[i, :] += sg.logjacobian(ais_samples[i]).flatten()
+			return sg(ais_samples[i])
+		ais_samples = mapp(parfor, range(len(ais_samples)))
+
+		print
+		print 'Data:', mean(-sqrt(sum(square(data), 0)) / 2. - data.shape[0] * log(2. * pi) / 2. + _logjac_dat)
+		print 'AIS samples:', mean(-sqrt(sum(square(ais_samples[0]), 0)) / 2. - data.shape[0] * log(2. * pi) / 2. + _logjac_ais)
+		print
 
 		# train additional layer
 		isa = ISA(compl_data.shape[0])
-#		isa.initialize(compl_data)
-		isa.orthogonalize()
-#		isa.train(compl_data, parameters={
-#			'verbosity': 1,
-#			'training_method': 'lbfgs',
-#			'max_iter': 5,
-#			'merge_subspaces': False,
-#			'lbfgs': {
-#				'max_iter': 50}})
-#		isa.train(compl_data, parameters={
-#			'verbosity': 1,
-#			'training_method': 'lbfgs',
-#			'max_iter': max_iter,
-#			'merge_subspaces': merge_subspaces,
-#			'merge': {
-#				'verbosity': 0,
-#				'num_merge': model.dim,
-#				'max_iter': 10,
-#			},
-#			'lbfgs': {
-#				'max_iter': 50}})
-
-		# make model Gaussian
-		subspaces = []
-		for _ in isa.subspaces():
-			gsm = GSM(1, 1)
-			gsm.scales = ones([1, 1])
-			subspaces.append(gsm)
-		isa.set_subspaces(subspaces)
+		isa.initialize(compl_data)
+		isa.train(compl_data, parameters={
+			'verbosity': 1,
+			'training_method': 'lbfgs',
+			'max_iter': 5,
+			'merge_subspaces': False,
+			'lbfgs': {
+				'max_iter': 50}})
+		isa.train(compl_data, parameters={
+			'verbosity': 1,
+			'training_method': 'lbfgs',
+			'max_iter': max_iter,
+			'merge_subspaces': merge_subspaces,
+			'merge': {
+				'verbosity': 0,
+				'num_merge': model.dim,
+				'max_iter': 10,
+			},
+			'lbfgs': {
+				'max_iter': 50}})
 
 		# replace top layer in model
 		stacked_model.model = StackedModel(sg, isa)
@@ -167,7 +179,7 @@ def main(argv):
 
 		# estimate average log-likelihood on test data
 		if len(ais_weights):
-			ais_weights_ = ais_weights.copy()
+			ais_weights_ = copy(ais_weights)
 
 			for i in range(len(ais_samples)):
 				ais_weights_[i, :] += isa.loglikelihood(ais_samples[i]).flatten()
@@ -193,6 +205,10 @@ def main(argv):
 
 
 def loglikelihood(model, data, ais_weights):
+	"""
+	Takes importance weights and computes log-likelihood in pixel space.
+	"""
+
 	# transforms
 	dct = model.transforms[0]
 	wt = model.model[1].transforms[0]

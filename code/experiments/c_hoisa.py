@@ -10,21 +10,21 @@ sys.path.append('./code')
 
 from isa import ISA, GSM
 from models import StackedModel, ConcatModel, MoGaussian
-from tools import Experiment, preprocess, mapp, logmeanexp
+from tools import Experiment, preprocess, mapp, logmeanexp, asshmarray
 from transforms import LinearTransform, WhiteningTransform, SubspaceGaussianization, Transform
 from numpy import seterr, asarray, sqrt, load, dot, vstack, hstack, mean, std, log, isnan, unique
 from numpy.random import rand
 from numpy.linalg import slogdet
 from glob import glob
 
-mapp.max_processes = 1
+mapp.max_processes = 24
 
 Transform.VERBOSITY = 0
 
 first_layers = {
 #	'8x8': 'results/c_vanhateren/c_vanhateren.7.22062012.075120.xpck',
 	'8x8': 'results/c_vanhateren/c_vanhateren.15.28062012.131634.xpck',
-	'16x16': 'results/c_vanhateren/c_vanhateren.10.24062012.025755.xpck',
+	'16x16': 'results/c_vanhateren/c_vanhateren.10.22072012.124848.xpck',
 }
 
 
@@ -33,10 +33,10 @@ def main(argv):
 
 	experiment = Experiment()
 
-	patch_size = '8x8'
+	patch_size = '16x16'
 	max_layers = 5
 	merge_subspaces = True
-	max_iter = 25
+	max_iter = 30
 	max_data = 100000
 	gibbs_num_steps = 10
 
@@ -108,6 +108,10 @@ def main(argv):
 		for i in range(len(ais_samples)):
 			ais_weights[i, :] -= isa.prior_loglikelihood(ais_samples[i]).flatten() - slogdet(compl_basis)[1]
 
+	# map AIS samples to visible space
+	for i in range(len(ais_samples)):
+		ais_samples[i] = dot(compl_basis, ais_samples[i])
+
 
 
 	# these objects will be saved
@@ -118,21 +122,34 @@ def main(argv):
 
 	### MODEL TRAINING
 
+	# move into shared memory
+	ais_weights = asshmarray(ais_weights)
+
 	# train remaining layers
 	for layer in range(1, max_layers):
 		# Gaussianize training data
 		sg = SubspaceGaussianization(isa)
 		compl_data = sg(compl_data)
 
-		for i in range(len(ais_samples)):
+		def parfor(i):
 			# Gaussianize AIS samples
-			ais_weights[i, :] += sg.logjacobian(dot(compl_basis, ais_samples[i])).flatten()
-			ais_samples[i] = sg(dot(compl_basis, ais_samples[i]))
+			ais_weights[i, :] += sg.logjacobian(ais_samples[i]).flatten()
+			return sg(ais_samples[i])
+		ais_samples = mapp(parfor, range(len(ais_samples)))
 
 		# train additional layer
-		isa = ISA(compl_data.shape[0])
+		isa = ISA(compl_data.shape[0], num_scales=30)
 		isa.initialize(compl_data)
 		isa.orthogonalize()
+		isa.train(compl_data, parameters={
+			'verbosity': 1,
+			'training_method': 'lbfgs',
+			'max_iter': 5,
+			'merge_subspaces': False,
+			'lbfgs': {
+				'max_iter': 50,
+				'num_grad': 10,
+			}})
 		isa.train(compl_data, parameters={
 			'verbosity': 1,
 			'training_method': 'lbfgs',
@@ -144,7 +161,9 @@ def main(argv):
 				'max_iter': 10,
 			},
 			'lbfgs': {
-				'max_iter': 50}})
+				'max_iter': 100,
+				'num_grad': 20,
+			}})
 
 		# replace top layer in model
 		stacked_model.model = StackedModel(sg, isa)
