@@ -22,7 +22,7 @@ from copy import deepcopy
 NUM_SAMPLES = 200 # used to estimate time transition operator takes
 NUM_STEPS_MULTIPLIER = 5 # number of transition operator applications for estimating computation time
 NUM_AUTOCORR = 200 # number of posterior autocorrelation functions averaged
-NUM_SECONDS_RUN = 5000 # length of Markov chain used to estimate autocorrelation
+NUM_SECONDS_RUN = 20000 # length of Markov chain used to estimate autocorrelation
 NUM_SECONDS_VIS = 90 # length of estimated autocorrelation function
 NUM_BURN_IN_STEPS = 100
 
@@ -85,6 +85,14 @@ def main(argv):
 
 	experiment = Experiment(seed=42)
 
+	try:
+		if int(os.environ['OMP_NUM_THREADS']) > 1 or int(os.environ['MKL_NUM_THREADS']) > 1:
+			print 'It seems that parallelization is turned on. This will skew the results. To turn it off:'
+			print '\texport OMP_NUM_THREADS=1'
+			print '\texport MKL_NUM_THREADS=1'
+	except:
+		print 'Parallelization of BLAS might be turned on. This could skew results.'
+
 	if not os.path.exists(EXPERIMENT_PATH):
 		print 'Could not find file \'{0}\'.'.format(EXPERIMENT_PATH)
 		return 0
@@ -108,7 +116,7 @@ def main(argv):
 	Y_ = ica.sample_posterior(X_, method=('gibbs', {'num_steps': NUM_BURN_IN_STEPS}))
 
 	for method in sampling_methods:
-		# disable output and parallelization
+		# disable output and parallelization for measuring time
 		Distribution.VERBOSITY = 0
 		mapp.max_processes = 1
 
@@ -131,7 +139,7 @@ def main(argv):
 
 		# enable output and parallelization
 		Distribution.VERBOSITY = 2
-		mapp.max_processes = 2
+		mapp.max_processes = 12
 
 		# posterior samples
 		Y = [Y_]

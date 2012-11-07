@@ -82,6 +82,14 @@ def autocorr(X, N, d=1):
 def main(argv):
 	seterr(over='raise', divide='raise', invalid='raise')
 
+	try:
+		if int(os.environ['OMP_NUM_THREADS']) > 1 or int(os.environ['MKL_NUM_THREADS']) > 1:
+			print 'It seems that parallelization is turned on. This will skew the results. To turn it off:'
+			print '\texport OMP_NUM_THREADS=1'
+			print '\texport MKL_NUM_THREADS=1'
+	except:
+		print 'Parallelization of BLAS might be turned on. This could skew results.'
+
 	experiment = Experiment(seed=42)
 
 	if os.path.exists('results/toyexample/toyexample.xpck'):

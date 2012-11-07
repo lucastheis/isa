@@ -461,6 +461,14 @@ sampling_methods = [
 def main(argv):
 	seterr(over='raise', divide='raise', invalid='raise')
 
+	try:
+		if int(os.environ['OMP_NUM_THREADS']) > 1 or int(os.environ['MKL_NUM_THREADS']) > 1:
+			print 'It seems that parallelization is turned on. This will skew the results. To turn it off:'
+			print '\texport OMP_NUM_THREADS=1'
+			print '\texport MKL_NUM_THREADS=1'
+	except:
+		print 'Parallelization of BLAS might be turned on. This could skew results.'
+
 	experiment = Experiment(seed=42)
 
 	if not os.path.exists(EXPERIMENT_PATH):
@@ -525,7 +533,7 @@ def main(argv):
 	gca().xmin = -1
 	gca().xmax = NUM_SECONDS
 
-	savefig('results/vanhateren/vanhateren_trace.tex')
+	savefig('results/vanhateren/vanhateren_trace_.tex')
 
 	return 0
 
