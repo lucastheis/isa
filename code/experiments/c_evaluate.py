@@ -53,7 +53,7 @@ def main(argv):
 
 	# compute average log-likelihood in [bit/pixel]
 	loglik = logmeanexp(ais_weights, 0) / log(2.) / data.shape[0]
-	loglik = loglik[:, -isnan(loglik)] # TODO: resolve NANs
+	loglik = loglik[:, -isnan(loglik)]
 
 	sem = std(loglik, ddof=1) / sqrt(loglik.size)
 
