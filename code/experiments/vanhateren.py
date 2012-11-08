@@ -24,7 +24,7 @@ Distribution.VERBOSITY = 2
 parameters = [
 	# complete models
 	['8x8',   1,  20, 10, True, False],
-	['16x16', 1,  20, 10, True, False],
+	['16x16', 1,  30, 15, True, False],
 
 	# overcomplete models
 	['8x8',   2, 1000, 100, True, False],
@@ -38,13 +38,17 @@ parameters = [
 	# initialize with sparse coding
 	['8x8',   2, 100, 100, True, True],
 	['8x8',   3, 100, 100, True, True],
-	['8x8',   4, 100, 100, True, True],
+	['8x8',   4, 100, 200, True, True],
 	['16x16', 2,  50, 100, True, True],
+	['16x16', 2,  50, 100, True, True],
+	['16x16', 2,  50, 100, True, True],
+
+	['8x8',   1,  20, 10, True, False],
 ]
 
 def main(argv):
 	if len(argv) < 2:
-		print 'Usage:', argv[0], '<param_id>'
+		print 'Usage:', argv[0], '<param_id>', '[experiment]'
 		print
 		print '  {0:>3} {1:>7} {2:>5} {3:>5} {4:>5} {5:>5} {6:>5}'.format(
 			'ID', 'PS', 'OC', 'TI', 'FI', 'LP', 'SC')
@@ -93,7 +97,7 @@ def main(argv):
 	### MODEL DEFINITION
 
 	isa = ISA(num_visibles=data.shape[0] - 1,
-	          num_hiddens=data.shape[0] * overcompleteness - 1)
+	          num_hiddens=data.shape[0] * overcompleteness - 1, ssize=1)
 
 	# model DC component with a mixture of Gaussians
 	model = StackedModel(dct,
@@ -129,61 +133,78 @@ def main(argv):
 
 
 
-	# enable regularization of marginals
-	for gsm in isa.subspaces:
-		gsm.gamma = 1e-3
-		gsm.alpha = 2.
-		gsm.beta = 1.
+	if len(argv) > 2:
+		# initialize model with trained model
+		results = Experiment(argv[2])
+		model = results['model']
 
-	# train mixture of Gaussians on DC component
-	model.train(data, 0, max_iter=100)
+		isa = model.model[1].model
+		dct = model.transforms[0]
 
-	# initialize filters and marginals
-	model.initialize(data, 1)
-	model.initialize(model=1, method='laplace')
-
-	experiment.progress(10)
-
-
-
-	if sparse_coding:
-		# initialize with sparse coding
-		if patch_size == '16x16':
-			model.train(data, 1,
-				method=('of', {
-					'max_iter': max_iter,
-					'noise_var': 0.05,
-					'var_goal': 1.,
-					'beta': 10.,
-					'step_width': 0.01,
-					'sigma': 0.3,
-					}),
-				callback=lambda isa, iteration: callback(0, isa, iteration))
-		else:
-			model.train(data, 1,
-				method=('of', {
-					'max_iter': max_iter,
-					'noise_var': 0.1,
-					'var_goal': 1.,
-					'beta': 10.,
-					'step_width': 0.01,
-					'sigma': 0.5,
-					}),
-				callback=lambda isa, iteration: callback(0, isa, iteration))
-		isa.orthogonalize()
+		experiment['model'] = model
 
 	else:
-		# train model using a subset of the data
-		model.train(data[:, :20000], 1,
-			max_iter=max_iter,
-			train_prior=train_prior,
-			persistent=True,
-			init_sampling_steps=5,
-			method=('sgd', {'momentum': 0.8}),
-			callback=lambda isa, iteration: callback(0, isa, iteration),
-			sampling_method=('gibbs', {'num_steps': 1}))
+		# enable regularization of marginals
+		for gsm in isa.subspaces:
+			gsm.gamma = 1e-3
+			gsm.alpha = 2.
+			gsm.beta = 1.
+
+		# train mixture of Gaussians on DC component
+		model.train(data, 0, max_iter=100)
+
+		# initialize filters and marginals
+		model.initialize(data, 1)
+		model.initialize(model=1, method='laplace')
+
+		experiment.progress(10)
+
+		if sparse_coding:
+			# initialize with sparse coding
+			if patch_size == '16x16':
+				model.train(data, 1,
+					method=('of', {
+						'max_iter': max_iter,
+						'noise_var': 0.05,
+						'var_goal': 1.,
+						'beta': 10.,
+						'step_width': 0.01,
+						'sigma': 0.3,
+						}),
+					callback=lambda isa, iteration: callback(0, isa, iteration))
+			else:
+				model.train(data, 1,
+					method=('of', {
+						'max_iter': max_iter,
+						'noise_var': 0.1,
+						'var_goal': 1.,
+						'beta': 10.,
+						'step_width': 0.01,
+						'sigma': 0.5,
+						}),
+					callback=lambda isa, iteration: callback(0, isa, iteration))
+			isa.orthogonalize()
+
+		else:
+			if patch_size == '16x16':
+				# prevents out-of-memory
+				mapp.max_processes = 1
+
+			# train model using a subset of the data
+			model.train(data[:, :20000], 1,
+				max_iter=max_iter,
+				train_prior=train_prior,
+				persistent=True,
+				init_sampling_steps=5,
+				method=('sgd', {'momentum': 0.8}),
+				callback=lambda isa, iteration: callback(0, isa, iteration),
+				sampling_method=('gibbs', {'num_steps': 1}))
 
 	experiment.progress(50)
+
+	if patch_size == '16x16':
+		# prevents out-of-memory
+		mapp.max_processes = 1
 
 	# disable regularization
 	for gsm in isa.subspaces:
@@ -193,8 +214,9 @@ def main(argv):
 	model.train(data, 1,
 		max_iter=max_iter_ft,
 		train_prior=train_prior,
+		train_subspaces=False,
 		persistent=True,
-		init_sampling_steps=10 if sparse_coding or not train_prior else 50,
+		init_sampling_steps=10 if not len(argv) > 2 and (sparse_coding or not train_prior) else 50,
 		method=('lbfgs', {'max_fun': 50}),
 		callback=lambda isa, iteration: callback(1, isa, iteration),
 		sampling_method=('gibbs', {'num_steps': 2}))

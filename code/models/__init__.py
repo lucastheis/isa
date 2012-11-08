@@ -9,3 +9,4 @@ from gsm import GSM
 from mogaussian import MoGaussian
 from concatmodel import ConcatModel
 from stackedmodel import StackedModel
+from mixture import Mixture

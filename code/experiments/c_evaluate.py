@@ -6,15 +6,12 @@ import sys
 
 sys.path.append('./code')
 
-from tools import Experiment, preprocess, mapp, logmeanexp
-from numpy import load, mean, log, min, max, std, sqrt
-from models import Distribution 
+from tools import Experiment, preprocess, logmeanexp
+from numpy import load, mean, log, min, max, std, sqrt, all, isnan
+from isa import ISA, GSM
 
-Distribution.VERBOSITY = 0
-mapp.max_processes = 2#10
-
-NUM_AIS_SAMPLES = 300
-NUM_AIS_STEPS = 300
+NUM_AIS_SAMPLES = 256
+NUM_AIS_STEPS = 1000
 
 def main(argv):
 	if len(argv) < 2:
@@ -42,15 +39,27 @@ def main(argv):
 	data = load('data/vanhateren.{0}.0.npz'.format(results['parameters'][0]))['data']
 	data = preprocess(data, shuffle=False)
 
+	params = results['model'].model[1].model.default_parameters()
+	params['ais']['num_samples'] = NUM_AIS_SAMPLES
+	params['ais']['num_iter'] = NUM_AIS_STEPS
+
+	model = results['model']
+
+
+
 	# compute importance weights estimating likelihoods
-	ais_weights = results['model'].loglikelihood(data[:, indices],
-		num_samples=NUM_AIS_SAMPLES, sampling_method=('ais', {'num_steps': NUM_AIS_STEPS}), return_all=True)
+	ais_weights = model.loglikelihood(data[:, indices],
+		parameters=params, return_all=True)
 
-	# average log-likelihood in [bit/pixel]
-	loglik = mean(logmeanexp(ais_weights, 0)) / log(2.) / data.shape[0]
-	sem = std(logmeanexp(ais_weights, 0), ddof=1) / log(2.) / data.shape[0] / sqrt(ais_weights.shape[1])
+	# compute average log-likelihood in [bit/pixel]
+	loglik = logmeanexp(ais_weights, 0) / log(2.) / data.shape[0]
+	loglik = loglik[:, -isnan(loglik)]
 
-	# store save results
+	sem = std(loglik, ddof=1) / sqrt(loglik.size)
+
+	loglik = mean(loglik)
+
+	# store results
 	experiment['indices'] = indices
 	experiment['ais_weights'] = ais_weights
 	experiment['loglik'] = loglik

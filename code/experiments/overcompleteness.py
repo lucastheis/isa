@@ -28,7 +28,8 @@ models = [
 		'color': RGB(0., 0.5, 0.8),
 	},
 	{
-		'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
+#		'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
+		'path': 'results/vanhateren.9/results.1.115.1.xpck',
 		'legend': 'GSM, 4x',
 		'color': RGB(0., 0.2, 0.5),
 	},
@@ -36,7 +37,8 @@ models = [
 
 # model used for visualizing basis
 model = {
-	'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
+#	'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
+	'path': 'results/vanhateren.9/results.1.115.1.xpck',
 }
 
 # resolution of basis image
@@ -114,7 +116,7 @@ def main(argv):
 	patches = repeat(repeat(patches, RES, 0), RES, 1)
 
 	imshow(patches, dpi=75 * RES)
-	rectangle(72 * RES, 90 * RES, 64 * RES, 46 * RES,
+	rectangle(72 * RES, 80.8 * RES, 64 * RES, 55.2 * RES,
 		color=RGB(1.0, 0.8, 0.5),
 		line_width=1.,
 		line_style='densely dashed')
@@ -142,7 +144,7 @@ def main(argv):
 	perc = percentile(hstack(samples), 99.5)
 	xvals = linspace(-perc, perc, 100)
 
-	for i in range(1, 6):
+	for i in range(1, 7):
 		for j in range(8, 15):
 			try:
 				gsm = isa.subspaces[indices[i * NUM_COLS + j]]
@@ -150,10 +152,10 @@ def main(argv):
 				pass
 			else:
 				subplot(7 - i, j, spacing=0)
-				plot(xvals, laplace.logpdf(xvals, scale=sqrt(0.5)).ravel(), 'k', opacity=0.5)
-				plot(xvals, gsm.loglikelihood(xvals.reshape(1, -1)).ravel(), 'b-', line_width=1.)
-				gca().width = 0.8
-				gca().height = 0.8
+				plot(xvals, laplace.logpdf(xvals, scale=sqrt(0.5)).ravel(), line_width=0.8, color=RGB(0.1, 0.6, 1.0))
+				plot(xvals, gsm.loglikelihood(xvals.reshape(1, -1)).ravel(), 'k', line_width=1.)
+				gca().width = 4. / 6.
+				gca().height = 4. / 6.
 				axis([-perc, perc, -6., 2.])
 				xtick([])
 				ytick([])

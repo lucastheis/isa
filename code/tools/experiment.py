@@ -7,7 +7,7 @@ Manage and display experimental results.
 __license__ = 'MIT License <http://www.opensource.org/licenses/mit-license.php>'
 __author__ = 'Lucas Theis <lucas@tuebingen.mpg.de>'
 __docformat__ = 'epytext'
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 
 import sys
 import os
@@ -91,6 +91,7 @@ class Experiment:
 		# date and duration of experiment
 		strl.append(strftime('date \t\t %a, %d %b %Y %H:%M:%S', localtime(self.time)))
 		strl.append('duration \t ' + str(int(self.duration)) + 's')
+		strl.append('hostname \t ' + self.hostname)
 
 		# commit hash
 		if self.commit:
@@ -265,12 +266,15 @@ class Experiment:
 
 
 
-	def save(self, filename=None):
+	def save(self, filename=None, overwrite=False):
 		"""
 		Store results. If a filename is given, the default is overwritten.
 
 		@type  filename: string
 		@param filename: path to where the experiment will be stored
+
+		@type  overwrite: boolean
+		@param overwrite: overwrite existing files
 		"""
 
 		self.duration = time() - self.time
@@ -293,12 +297,13 @@ class Experiment:
 		counter = 0
 		pieces = path.splitext(filename)
 
-		while path.exists(filename):
-			counter += 1
-			filename = pieces[0] + '.' + str(counter) + pieces[1]
+		if not overwrite:
+			while path.exists(filename):
+				counter += 1
+				filename = pieces[0] + '.' + str(counter) + pieces[1]
 
-		if counter:
-			warn(''.join(pieces) + ' already exists. Saving to ' + filename + '.')
+			if counter:
+				warn(''.join(pieces) + ' already exists. Saving to ' + filename + '.')
 
 		# store experiment
 		with open(filename, 'wb') as handle:
@@ -355,7 +360,7 @@ class Experiment:
 				if StrictVersion(res['version']) >= '0.3.1' else None
 			self.script = res['script'] \
 				if StrictVersion(res['version']) >= '0.4.0' else None
-			self.script = res['script_path'] \
+			self.script_path = res['script_path'] \
 				if StrictVersion(res['version']) >= '0.4.0' else None
 			self.cwd = res['cwd'] \
 				if StrictVersion(res['version']) >= '0.4.0' else None
