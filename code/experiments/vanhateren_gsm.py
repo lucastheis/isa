@@ -1,6 +1,7 @@
 """
 Fit Gaussian scale mixture to van Hateren patches.
 """
+
 import sys
 
 sys.path.append('./code')
