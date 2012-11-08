@@ -70,7 +70,7 @@ def main(argv):
 	seterr(invalid='raise', over='raise', divide='raise')
 
 	# start experiment
-	experiment = Experiment(server='10.38.138.150')
+	experiment = Experiment()
 
 	# hyperparameters
 	patch_size, \
