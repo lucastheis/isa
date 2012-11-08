@@ -20,10 +20,10 @@ from tools import Experiment
 from copy import deepcopy
 
 NUM_SAMPLES = 200 # used to estimate time transition operator takes
-NUM_STEPS_MULTIPLIER = 5 # number of transition operator applications for estimating times
+NUM_STEPS_MULTIPLIER = 5 # number of transition operator applications for estimating computation time
 NUM_AUTOCORR = 200 # number of posterior autocorrelation functions averaged
-NUM_CHAINS = 500 # number of chains used to estimate each autocorrelation function
-NUM_SECONDS = 90
+NUM_SECONDS_RUN = 20000 # length of Markov chain used to estimate autocorrelation
+NUM_SECONDS_VIS = 90 # length of estimated autocorrelation function
 NUM_BURN_IN_STEPS = 100
 
 EXPERIMENT_PATH = 'results/vanhateren/vanhateren.7.08042012.150147.xpck'
@@ -39,16 +39,6 @@ sampling_methods = [
 			'lf_randomness': 0.05,
 		},
 		'color': RGB(0.9, 0.0, 0.0),
-	},
-	{
-		'method': 'hmc', 
-		'parameters': {
-			'num_steps': 2,
-			'lf_step_size': 0.1,
-			'lf_num_steps': 20,
-			'lf_randomness': 0.1,
-		},
-		'color': RGB(0.0, 0.0, 0.0),
 	},
 	{
 		'method': 'mala', 
@@ -67,10 +57,41 @@ sampling_methods = [
 	},
 ]
 
+
+
+def autocorr(X, N, d=1):
+	"""
+	Estimates autocorrelation from a sample of a possibly multivariate
+	stationary Markov chain.
+	"""
+
+	X = X - mean(X, 1).reshape(-1, 1)
+	v = mean(sum(square(X), 0))
+
+	# autocovariance
+	A = [v]
+
+	for t in range(1, N + 1, d):
+		A.append(mean(sum(X[:, :-t] * X[:, t:], 0)))
+
+	# normalize by variance
+	return hstack(A) / v
+
+
+
+
 def main(argv):
 	seterr(over='raise', divide='raise', invalid='raise')
 
 	experiment = Experiment(seed=42)
+
+	try:
+		if int(os.environ['OMP_NUM_THREADS']) > 1 or int(os.environ['MKL_NUM_THREADS']) > 1:
+			print 'It seems that parallelization is turned on. This will skew the results. To turn it off:'
+			print '\texport OMP_NUM_THREADS=1'
+			print '\texport MKL_NUM_THREADS=1'
+	except:
+		print 'Parallelization of BLAS might be turned on. This could skew results.'
 
 	if not os.path.exists(EXPERIMENT_PATH):
 		print 'Could not find file \'{0}\'.'.format(EXPERIMENT_PATH)
@@ -90,16 +111,20 @@ def main(argv):
 	wt = results['model'].model[1].transforms[0]
 	data = wt(dct(data)[1:])
 
+	# burn-in using Gibbs sampler
+	X_ = data[:, :NUM_AUTOCORR]
+	Y_ = ica.sample_posterior(X_, method=('gibbs', {'num_steps': NUM_BURN_IN_STEPS}))
+
 	for method in sampling_methods:
-		# disable output and parallelization
+		# disable output and parallelization for measuring time
 		Distribution.VERBOSITY = 0
 		mapp.max_processes = 1
 
-		# measure time required by transition operator
-		start = time()
-
 		Y = ica.sample_prior(NUM_SAMPLES)
 		X = dot(ica.A, Y)
+
+		# measure time required by transition operator
+		start = time()
 
 		# increase number of steps to reduce overhead
 		ica.sample_posterior(X, method=(method['method'], dict(method['parameters'],
@@ -108,37 +133,36 @@ def main(argv):
 		# time required per transition operator application
 		duration = (time() - start) / NUM_STEPS_MULTIPLIER
 
-		num_mcmc_steps = int(NUM_SECONDS / duration + 1.)
+		# number of mcmc steps to run for this method
+		num_mcmc_steps = int(NUM_SECONDS_RUN / duration + 1.)
+		num_autocorr_steps = int(NUM_SECONDS_VIS / duration + 1.)
 
 		# enable output and parallelization
 		Distribution.VERBOSITY = 2
-		mapp.max_processes = 2
+		mapp.max_processes = 12
 
-		autocorr = []
+		# posterior samples
+		Y = [Y_]
 
-		for n in range(NUM_AUTOCORR):
-			# burn-in phase
-			X = repeat(data[:, [n]], NUM_CHAINS, 1)
-			Y = ica.sample_posterior(X, method=('gibbs', {'num_steps': NUM_BURN_IN_STEPS}))
+		# Markov chain
+		for i in range(num_mcmc_steps):
+			Y.append(ica.sample_posterior(X_, 
+				method=(method['method'], dict(method['parameters'], Y=Y[-1]))))
 
-			energies = [ica.prior_energy(Y)]
+		ac = []
 
-			# Markov chain
-			for i in range(num_mcmc_steps):
-				Y = ica.sample_posterior(X, method=(method['method'], 
-					dict(method['parameters'], Y=Y)))
-				energies.append(ica.prior_energy(Y))
+		for j in range(NUM_AUTOCORR):
+			# collect samples belonging to one posterior distribution
+			S = hstack([Y[k][:, [j]] for k in range(num_mcmc_steps)])
 
-			energies = vstack(energies)
+			# compute autocorrelation for j-th posterior
+			ac = [autocorr(S, num_autocorr_steps)]
 
-			energy_mean = mean(energies)
-			energy_var = mean(square(energies[[0]] - energy_mean))
-			energy_cov = mean((energies - energy_mean) * (energies[[0]]  - energy_mean), 1)
-			
-			autocorr.append(energy_cov / energy_var)
-
-		plot(arange(num_mcmc_steps) * duration, mean(autocorr, 0), '-', color=method['color'],
-			line_width=1.2, comment=str(method['parameters']))
+		# average and plot autocorrelation functions
+		plot(arange(num_autocorr_steps) * duration, mean(ac, 0), '-', 
+			color=method['color'],
+			line_width=1.2,
+			comment=str(method['parameters']))
 
 	xlabel('time in seconds')
 	ylabel('autocorrelation')
@@ -147,9 +171,9 @@ def main(argv):
 	gca().width = 7
 	gca().height = 7
 	gca().xmin = -1
-	gca().xmax = NUM_SECONDS
+	gca().xmax = NUM_SECONDS_VIS
 
-	savefig('results/vanhateren/vanhateren_autocorr.tex')
+	savefig('results/vanhateren/vanhateren_autocorr2.tex')
 
 	return 0
 
