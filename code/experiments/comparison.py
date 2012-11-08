@@ -72,9 +72,7 @@ linear_models = [
 	},
 	{
 		'label': '4x',
-#		'path': 'results/vanhateren/vanhateren.9.14042012.043802.xpck',
 		'path': 'results/vanhateren/vanhateren.9.14042012.copy.xpck',
-#		'path': 'results/vanhateren.9/results.1.95.1.xpck',
 		'color': RGB(0., 0.0, 0.0),
 		'fill': RGB(0., 0.5, 0.8),
 	},
