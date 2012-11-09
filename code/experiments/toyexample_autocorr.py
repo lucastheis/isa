@@ -165,7 +165,7 @@ def main(argv):
 	gca().xmin = -1
 	gca().xmax = NUM_SECONDS_VIS
 
-	savefig('results/toyexample/toyexample_autocorr2.tex')
+	savefig('results/toyexample/toyexample_autocorr.tex')
 
 	return 0
 

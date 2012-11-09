@@ -1,5 +1,5 @@
 """
-Plot autocorrelation for toy model.
+Plot autocorrelation for image model.
 """
 
 import os
@@ -139,7 +139,7 @@ def main(argv):
 
 		# enable output and parallelization
 		Distribution.VERBOSITY = 2
-		mapp.max_processes = 12
+		mapp.max_processes = 1
 
 		# posterior samples
 		Y = [Y_]
@@ -173,7 +173,7 @@ def main(argv):
 	gca().xmin = -1
 	gca().xmax = NUM_SECONDS_VIS
 
-	savefig('results/vanhateren/vanhateren_autocorr2.tex')
+	savefig('results/vanhateren/vanhateren_autocorr.tex')
 
 	return 0
 
