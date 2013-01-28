@@ -143,7 +143,7 @@ class ISA(Distribution):
 				samples = t.rvs(2., size=[1, 50000]) * samples
 
 			elif method.lower() == 'exponpow':
-				exponent = 0.5
+				exponent = 0.8
 				samples = randn(self.subspaces[0].dim, 200000)
 				samples = samples / sqrt(sum(square(samples), 0))
 				samples = gamma(1. / exponent, 1., (1, 200000))**(1. / exponent) * samples
@@ -271,10 +271,6 @@ class ISA(Distribution):
 				# learn subspaces (M)
 				Y = self.train_subspaces(Y)
 
-			if train_basis and train_prior and (not orthogonalize):
-				# normalize variances of marginals
-				self.normalize_prior()
-
 			if persistent:
 				# initializes samples in next iteration
 				sampling_method[1]['Z'] = dot(self.nullspace_basis(), Y)
@@ -300,6 +296,10 @@ class ISA(Distribution):
 				if orthogonalize:
 					# normalize feature matrix
 					self.orthogonalize()
+
+			if train_basis and train_prior and (not orthogonalize):
+				# normalize variances of marginals
+				self.normalize_prior()
 
 			if callback:
 				callback(self, i + 1)
@@ -543,6 +543,7 @@ class ISA(Distribution):
 
 			if weight_decay > 0.:
 				v += weight_decay / 2. * sum(square(inv(W)))
+
 			return v
 
 		# objective function gradient
