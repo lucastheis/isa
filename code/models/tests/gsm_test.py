@@ -3,12 +3,16 @@ import unittest
 
 sys.path.append('./code')
 
-from models import GSM
-from tools import logmeanexp
+from models import GSM, Distribution
+from tools import logmeanexp, mapp
 from numpy import zeros, all, abs, array, square, log, pi, sum, mean, inf, exp
-from numpy import histogram, max
+from numpy import histogram, max, sqrt
 from numpy.random import randn, rand
 from scipy import integrate
+from scipy.stats import laplace
+
+mapp.max_processes = 1
+Distribution.VERBOSITY = 0
 
 class Tests(unittest.TestCase):
 	def test_energy_gradient(self):
@@ -16,9 +20,10 @@ class Tests(unittest.TestCase):
 		Tests whether the energy gradient is similar to a numerical gradient.
 		"""
 
-		step_size = 1E-4
+		step_size = 1E-5
 
 		model = GSM(3, num_scales=7)
+		model.initialize('laplace')
 
 		# samples and true gradient
 		X = model.sample(100)

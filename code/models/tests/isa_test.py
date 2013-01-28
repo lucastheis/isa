@@ -5,7 +5,9 @@ sys.path.append('./code')
 
 from models import ISA, Distribution
 from numpy import zeros, all, abs, eye, sqrt
+from tools import mapp
 
+mapp.max_processes = 1
 Distribution.VERBOSITY = 0
 
 class Tests(unittest.TestCase):
